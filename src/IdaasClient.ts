@@ -1,19 +1,25 @@
 import { PersistenceManager } from "./PersistenceManager";
-import { type OidcConfig, fetchOpenidConfiguration } from "./api";
-import { base64UrlStringEncode, createRandomString, generateChallengeVerifierPair } from "./utils";
-export class IdaasClient {
-  private persistenceManager: PersistenceManager;
-  private instantiated = false;
-  private config?: OidcConfig;
-  private readonly issuerUrl: string;
+import { type OidcConfig, type TokenRequest, fetchOpenidConfiguration, requestToken } from "./api";
+import { base64UrlStringEncode, createRandomString, generateChallengeVerifierPair } from "./utils/crypto";
+import { formatIssuerUrl } from "./utils/format";
+import { validateIdToken } from "./utils/jwt";
 
-  constructor(
-    issuerUrl: string,
-    private readonly clientId: string,
-  ) {
-    // Format the issuerUrl to remove trailing /
-    this.issuerUrl = issuerUrl.endsWith("/") ? issuerUrl.slice(0, -1) : issuerUrl;
+export interface IdaasClientOptions {
+  issuerUrl: string;
+  clientId: string;
+}
+
+export class IdaasClient {
+  private readonly persistenceManager: PersistenceManager;
+  private readonly issuerUrl: string;
+  private readonly clientId: string;
+
+  private config?: OidcConfig;
+
+  constructor({ issuerUrl, clientId }: IdaasClientOptions) {
+    this.issuerUrl = formatIssuerUrl(issuerUrl);
     this.persistenceManager = new PersistenceManager(clientId);
+    this.clientId = clientId;
   }
 
   /**
@@ -21,8 +27,8 @@ export class IdaasClient {
    * @param redirectUri optional callback url, if not provided will default to window location when starting ceremony
    */
   async login(redirectUri?: string) {
-    if (!this.instantiated) {
-      await this.loadConfiguration();
+    if (!this.config) {
+      this.config = await fetchOpenidConfiguration(this.issuerUrl);
     }
 
     const { url, nonce, state, codeVerifier } = await this.generateAuthorizationUrl(redirectUri);
@@ -37,11 +43,44 @@ export class IdaasClient {
   }
 
   /**
-   * Handle the callback to the login redirectUri post-authorize and pass the received code to
-   * the token endpoint to get the auth token.
+   * Handle the callback to the login redirectUri post-authorize and pass the received code to the token endpoint to get
+   * the access token, ID token, and optionally refresh token (optional). Additionally, validate the ID token claims.
+   *
+   * @param callbackUrl optional url of the redirect after the initial authorization is complete, if not provided will default
+   * to the current window location
    */
-  public async handleRedirect() {}
+  public async handleRedirect(callbackUrl: string = window.location.href) {
+    if (!this.config) {
+      this.config = await fetchOpenidConfiguration(this.issuerUrl);
+    }
 
+    const clientParams = this.persistenceManager.getClientParams();
+    if (!clientParams) {
+      throw new Error("Failed to recover IDaaS client state from local storage");
+    }
+    const { codeVerifier, redirectUri, state, nonce } = clientParams;
+
+    const authorizeResponse = this.parseRedirectSearchParams(callbackUrl);
+
+    if (state !== authorizeResponse.state) {
+      throw new Error(
+        "State received during redirect does not match the state from the beginning of the OIDC ceremony",
+      );
+    }
+
+    const { tokenResponse, decodedIdToken } = await this.requestToken(
+      authorizeResponse.code,
+      codeVerifier,
+      redirectUri,
+      nonce,
+    );
+
+    this.persistenceManager.saveTokens({ ...tokenResponse, decodedIdToken });
+  }
+
+  public isAuthenticated() {
+    return !!this.persistenceManager.getTokens();
+  }
   /**
    * Clear the application session and navigate to the IDP's endsession endpoint.
    */
@@ -49,20 +88,62 @@ export class IdaasClient {
     this.persistenceManager.remove();
   }
 
-  /**
-   * Fetch the OIDC configuration from the well-known endpoint and populate internal fields.
-   */
-  private async loadConfiguration() {
-    this.config = await fetchOpenidConfiguration(this.issuerUrl);
-    this.instantiated = true;
+  private parseRedirectSearchParams(callbackUrl: string): RedirectParams {
+    const url = new URL(callbackUrl);
+    const searchParams = url.searchParams;
+
+    const state = searchParams.get("state");
+    const code = searchParams.get("code");
+    const error = searchParams.get("error");
+    const errorDescription = searchParams.get("error_description");
+
+    if (error) {
+      throw new Error("Error during authorization", { cause: errorDescription });
+    }
+
+    if (!state || !code) {
+      throw new Error("URL must contain state and code for the authorization flow");
+    }
+
+    return {
+      state,
+      code,
+    };
+  }
+
+  private async requestToken(code: string, codeVerifier: string, redirectUri: string, nonce: string) {
+    if (!this.config) {
+      this.config = await fetchOpenidConfiguration(this.issuerUrl);
+    }
+
+    const tokenRequest: TokenRequest = {
+      client_id: this.clientId,
+      code,
+      code_verifier: codeVerifier,
+      grant_type: "authorization_code",
+      redirect_uri: redirectUri,
+    };
+
+    const tokenResponse = await requestToken(this.config.token_endpoint, tokenRequest);
+
+    const decodedIdToken = validateIdToken({
+      clientId: this.clientId,
+      idToken: tokenResponse.id_token,
+      issuer: this.issuerUrl,
+      nonce,
+      idTokenSigningAlgValuesSupported: this.config.id_token_signing_alg_values_supported,
+      acrValuesSupported: this.config.acr_values_supported,
+    });
+
+    return { tokenResponse, decodedIdToken };
   }
 
   /**
    * Generate the authorization url by generating searchParams. codeVerifier will need to be stored for use after redirect.
    */
-  private async generateAuthorizationUrl(redirectUri?: string) {
+  private async generateAuthorizationUrl(redirectUri: string = window.location.origin) {
     if (!this.config) {
-      throw new Error("OIDC Configuration is not loaded.");
+      this.config = await fetchOpenidConfiguration(this.issuerUrl);
     }
 
     const state = base64UrlStringEncode(createRandomString());
@@ -72,7 +153,7 @@ export class IdaasClient {
     const url = new URL(this.config.authorization_endpoint);
     url.searchParams.append("response_type", "code");
     url.searchParams.append("client_id", this.clientId);
-    url.searchParams.append("redirect_uri", redirectUri ?? window.location.origin);
+    url.searchParams.append("redirect_uri", redirectUri);
     url.searchParams.append("scope", "openid profile offline_access");
     url.searchParams.append("state", state);
     url.searchParams.append("nonce", nonce);
@@ -82,4 +163,9 @@ export class IdaasClient {
 
     return { url: url.toString(), nonce, state, codeVerifier };
   }
+}
+
+interface RedirectParams {
+  state: string;
+  code: string;
 }

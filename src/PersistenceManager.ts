@@ -1,3 +1,6 @@
+import type { JWTPayload } from "jose";
+import type { TokenResponse } from "./api";
+
 /**
  * The parameters that are created during the creation of the authorization URL.
  * @interface ClientParams
@@ -12,21 +15,14 @@ interface ClientParams {
   redirectUri: string;
   state: string;
 }
+
 /**
- * The structure of the response from token endpoint
- * @interface Tokens
- * @member access_token Token that is used for giving access to protected resources
- * @member refresh_token Token that is used to refresh the expiry of the user's session
- * @member id_token Token that contains the information of the user
- * @member token_type The type of token
- * @member expires_in Time in seconds before tokens expire
+ * The authenticated state after completing the OIDC authorization flow.
+ *
+ * Includes the access token, ID token, and refresh token (optional), as well as the decoded ID token claims
  */
-interface Tokens {
-  access_token: string;
-  refresh_token?: string;
-  id_token: string;
-  token_type: string;
-  expires_in: number;
+interface Tokens extends TokenResponse {
+  decodedIdToken: JWTPayload;
 }
 
 export class PersistenceManager {
@@ -83,7 +79,7 @@ export class PersistenceManager {
    * Retrieves the ClientParams stored in local storage.
    * @returns The ClientParams
    */
-  public getClientParams() {
+  public getClientParams(): ClientParams | undefined {
     return this.get(this.clientParamsStorageKey);
   }
 
@@ -91,7 +87,7 @@ export class PersistenceManager {
    * Retrieves the Tokens stored in local storage.
    * @returns The Tokens
    */
-  public getTokenParams() {
+  public getTokens(): Tokens | undefined {
     return this.get(this.tokensStorageKey);
   }
 
