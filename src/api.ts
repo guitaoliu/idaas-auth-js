@@ -1,3 +1,5 @@
+import { keysToCamel } from "./utils";
+
 export interface OidcConfig {
   issuer: string;
   authorizationEndpoint: string;
@@ -12,7 +14,7 @@ export const fetchOpenidConfiguration = async (issuerUrl: string): Promise<OidcC
 
   try {
     const response = await fetch(wellKnownUrl);
-    return await response.json();
+    return keysToCamel(await response.json());
   } catch (error) {
     throw new Error(`Failed to load OIDC configuration: ${error}`);
   }
