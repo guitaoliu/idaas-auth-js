@@ -1,6 +1,8 @@
+import { PersistenceManager } from "./PersistenceManager";
 import { type OidcConfig, fetchOpenidConfiguration } from "./api";
 import { base64UrlStringEncode, createRandomString, generateChallengeVerifierPair } from "./utils";
 export class IdaasClient {
+  private persistenceManager: PersistenceManager;
   private instantiated = false;
   private config?: OidcConfig;
   private readonly issuerUrl: string;
@@ -11,6 +13,7 @@ export class IdaasClient {
   ) {
     // Format the issuerUrl to remove trailing /
     this.issuerUrl = issuerUrl.endsWith("/") ? issuerUrl.slice(0, -1) : issuerUrl;
+    this.persistenceManager = new PersistenceManager(clientId);
   }
 
   /**
@@ -22,8 +25,14 @@ export class IdaasClient {
       await this.loadConfiguration();
     }
 
-    const url = await this.generateAuthorizationUrl(redirectUri);
+    const { url, nonce, state, codeVerifier } = await this.generateAuthorizationUrl(redirectUri);
 
+    this.persistenceManager.saveClientParams({
+      nonce,
+      state,
+      codeVerifier,
+      redirectUri: redirectUri ?? window.location.origin,
+    });
     window.location.href = url;
   }
 
@@ -36,7 +45,9 @@ export class IdaasClient {
   /**
    * Clear the application session and navigate to the IDP's endsession endpoint.
    */
-  public async logout() {}
+  public async logout() {
+    this.persistenceManager.remove();
+  }
 
   /**
    * Fetch the OIDC configuration from the well-known endpoint and populate internal fields.
@@ -69,6 +80,6 @@ export class IdaasClient {
     url.searchParams.append("code_challenge", codeChallenge);
     url.searchParams.append("code_challenge_method", "S256");
 
-    return url.toString();
+    return { url: url.toString(), nonce, state, codeVerifier };
   }
 }
