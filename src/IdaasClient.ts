@@ -26,7 +26,7 @@ export class IdaasClient {
    * Begin the OIDC ceremony by navigating to the authorize endpoint with the necessary query parameters.
    * @param redirectUri optional callback url, if not provided will default to window location when starting ceremony
    */
-  async login(redirectUri?: string) {
+  async login(redirectUri: string = window.location.origin) {
     if (!this.config) {
       this.config = await fetchOpenidConfiguration(this.issuerUrl);
     }
@@ -82,10 +82,21 @@ export class IdaasClient {
     return !!this.persistenceManager.getTokens();
   }
   /**
-   * Clear the application session and navigate to the IDP's endsession endpoint.
+   * Clear the application session and navigate to the OpenID Provider's (OP) endsession endpoint.
+   * @param redirectUri optional url to redirect to after logout, must be one of the allowed logout redirect URLs defined
+   * in the OIDC application. If not provided, the user will remain at the OP.
    */
-  public async logout() {
+  public async logout(redirectUri?: string) {
+    const tokens = this.persistenceManager.getTokens();
+    if (!tokens) {
+      // Discontinue logout, the user is not authenticated
+      return;
+    }
+    const { id_token } = tokens;
+
     this.persistenceManager.remove();
+
+    window.location.href = await this.generateLogoutUrl(id_token, redirectUri);
   }
 
   private parseRedirectSearchParams(callbackUrl: string): RedirectParams {
@@ -141,7 +152,7 @@ export class IdaasClient {
   /**
    * Generate the authorization url by generating searchParams. codeVerifier will need to be stored for use after redirect.
    */
-  private async generateAuthorizationUrl(redirectUri: string = window.location.origin) {
+  private async generateAuthorizationUrl(redirectUri: string) {
     if (!this.config) {
       this.config = await fetchOpenidConfiguration(this.issuerUrl);
     }
@@ -162,6 +173,24 @@ export class IdaasClient {
     url.searchParams.append("code_challenge_method", "S256");
 
     return { url: url.toString(), nonce, state, codeVerifier };
+  }
+
+  /**
+   * Generate the endsession url with the required query params to log out the user from the OpenID Provider
+   */
+  private async generateLogoutUrl(idToken: string, redirectUri?: string): Promise<string> {
+    if (!this.config) {
+      this.config = await fetchOpenidConfiguration(this.issuerUrl);
+    }
+
+    const url = new URL(this.config.end_session_endpoint);
+    url.searchParams.append("id_token_hint", idToken);
+    url.searchParams.append("client_id", this.clientId);
+    if (redirectUri) {
+      url.searchParams.append("post_logout_redirect_uri", redirectUri);
+    }
+
+    return url.toString();
   }
 }
 
