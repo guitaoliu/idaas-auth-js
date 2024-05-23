@@ -36,10 +36,10 @@ export class IdaasClient {
   /**
    * Begin the OIDC ceremony by navigating to the authorize endpoint with the necessary query parameters.
    * @param redirectUri optional callback url, if not provided will default to window location when starting ceremony
+   * @param audience passed to the authorization endpoint and applied to the access token
    */
-  async login(redirectUri: string = window.location.origin) {
-    const { url, nonce, state, codeVerifier } = await this.generateAuthorizationUrl(redirectUri);
-
+  async login(redirectUri: string = window.location.origin, audience?: string) {
+    const { url, nonce, state, codeVerifier } = await this.generateAuthorizationUrl(redirectUri, audience);
     this.persistenceManager.saveClientParams({
       nonce,
       state,
@@ -206,17 +206,19 @@ export class IdaasClient {
   /**
    * Generate the authorization url by generating searchParams. codeVerifier will need to be stored for use after redirect.
    */
-  private async generateAuthorizationUrl(redirectUri: string) {
+  private async generateAuthorizationUrl(redirectUri: string, audience?: string) {
     const { authorization_endpoint } = await this.getConfig();
 
     const state = base64UrlStringEncode(createRandomString());
     const nonce = base64UrlStringEncode(createRandomString());
     const { codeVerifier, codeChallenge } = await generateChallengeVerifierPair();
-
     const url = new URL(authorization_endpoint);
     url.searchParams.append("response_type", "code");
     url.searchParams.append("client_id", this.clientId);
     url.searchParams.append("redirect_uri", redirectUri);
+    if (audience) {
+      url.searchParams.append("audience", audience);
+    }
     url.searchParams.append("scope", "openid profile offline_access");
     url.searchParams.append("state", state);
     url.searchParams.append("nonce", nonce);
