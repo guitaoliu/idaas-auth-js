@@ -21,7 +21,7 @@ interface ClientParams {
  *
  * Includes the access token, ID token, and refresh token (optional), as well as the decoded ID token claims
  */
-interface Tokens extends TokenResponse {
+export interface Tokens extends TokenResponse {
   decodedIdToken: JWTPayload;
   expiresAt: number;
 }

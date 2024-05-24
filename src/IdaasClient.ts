@@ -1,4 +1,4 @@
-import { PersistenceManager } from "./PersistenceManager";
+import { PersistenceManager, type Tokens } from "./PersistenceManager";
 import {
   type AccessTokenRequest,
   type OidcConfig,
@@ -7,6 +7,8 @@ import {
   fetchOpenidConfiguration,
   requestToken,
 } from "./api";
+import type { AuthorizeResponse } from "./models";
+import { listenToPopup, openPopup } from "./utils/browser";
 import { base64UrlStringEncode, createRandomString, generateChallengeVerifierPair } from "./utils/crypto";
 import { formatIssuerUrl } from "./utils/format";
 import { validateIdToken } from "./utils/jwt";
@@ -34,18 +36,71 @@ export class IdaasClient {
   }
 
   /**
-   * Begin the OIDC ceremony by navigating to the authorize endpoint with the necessary query parameters.
+   * Perform the authorization code flow by authenticating the user to obtain an access token and optionally refresh and
+   * ID tokens.
+   *
+   * If using redirect (i.e. popup=false), your application must also be configured to call handleRedirect at the redirectUri
+   * to complete the flow.
+   *
    * @param redirectUri optional callback url, if not provided will default to window location when starting ceremony
    * @param audience passed to the authorization endpoint and applied to the access token
+   * @param popup whether the authentication will occur in a new popup window, defaults to false. When false the browser will
+   * navigate to the OP to authenticate the user.
    */
-  async login(redirectUri: string = window.location.origin, audience?: string) {
-    const { url, nonce, state, codeVerifier } = await this.generateAuthorizationUrl(redirectUri, audience);
+  async login(redirectUri = window.location.origin, popup = false, audience?: string) {
+    const { response_modes_supported } = await this.getConfig();
+    if (popup) {
+      const popupSupported = response_modes_supported?.includes("web_message");
+      if (!popupSupported) {
+        throw new Error("Attempting to use popup but web_message is not supported by OpenID provider.");
+      }
+      await this.loginWithPopup(redirectUri, audience);
+    } else {
+      await this.loginWithRedirect(redirectUri, audience);
+    }
+  }
+
+  /**
+   * Perform the authorization code flow using a new popup window at the OpenID Provider (OP) to authenticate the user.
+   *
+   * @param redirectUri to navigate to after a successful authentication
+   * @param audience the intended audience for the received access token once login is complete
+   */
+  private async loginWithPopup(redirectUri: string, audience?: string) {
+    const { url, nonce, state, codeVerifier } = await this.generateAuthorizationUrl(
+      "web_message",
+      redirectUri,
+      audience,
+    );
+
+    const popup = openPopup(url);
+    const authorizeResponse = await listenToPopup(popup);
+    const authorizeCode = this.validateAuthorizeResponse(authorizeResponse, state);
+
+    const tokens = await this.requestAndValidateTokens(authorizeCode, codeVerifier, redirectUri, nonce);
+
+    this.persistenceManager.saveTokens(tokens);
+
+    window.location.href = redirectUri;
+  }
+
+  /**
+   * Perform the authorization code flow by redirecting to the OpenID Provider (OP) to authenticate the user and then redirect
+   * with the necessary state and code.
+   *
+   * @param redirectUri to navigate to after a successful authentication
+   * @param audience the intended audience for the received access token once login is complete
+   */
+  private async loginWithRedirect(redirectUri: string, audience?: string) {
+    const { url, nonce, state, codeVerifier } = await this.generateAuthorizationUrl("query", redirectUri, audience);
+
     this.persistenceManager.saveClientParams({
       nonce,
       state,
       codeVerifier,
-      redirectUri: redirectUri ?? window.location.origin,
+      redirectUri,
     });
+
     window.location.href = url;
   }
 
@@ -64,23 +119,11 @@ export class IdaasClient {
     const { codeVerifier, redirectUri, state, nonce } = clientParams;
 
     const authorizeResponse = this.parseRedirectSearchParams(callbackUrl);
-    if (state !== authorizeResponse.state) {
-      throw new Error(
-        "State received during redirect does not match the state from the beginning of the OIDC ceremony",
-      );
-    }
+    const authorizeCode = this.validateAuthorizeResponse(authorizeResponse, state);
 
-    const { tokenResponse, decodedIdToken } = await this.requestToken(
-      authorizeResponse.code,
-      codeVerifier,
-      redirectUri,
-      nonce,
-    );
+    const tokens = await this.requestAndValidateTokens(authorizeCode, codeVerifier, redirectUri, nonce);
 
-    const issuedAt = Math.floor(Date.now() / 1000);
-    const expiresAt = Number.parseInt(tokenResponse.expires_in) + issuedAt;
-
-    this.persistenceManager.saveTokens({ ...tokenResponse, decodedIdToken, expiresAt });
+    this.persistenceManager.saveTokens(tokens);
   }
 
   public isAuthenticated() {
@@ -88,6 +131,7 @@ export class IdaasClient {
   }
   /**
    * Clear the application session and navigate to the OpenID Provider's (OP) endsession endpoint.
+   *
    * @param redirectUri optional url to redirect to after logout, must be one of the allowed logout redirect URLs defined
    * in the OIDC application. If not provided, the user will remain at the OP.
    */
@@ -146,29 +190,50 @@ export class IdaasClient {
     return newAccessToken;
   }
 
-  private parseRedirectSearchParams(callbackUrl: string): RedirectParams {
+  private parseRedirectSearchParams(callbackUrl: string): AuthorizeResponse {
     const url = new URL(callbackUrl);
     const searchParams = url.searchParams;
 
     const state = searchParams.get("state");
     const code = searchParams.get("code");
     const error = searchParams.get("error");
-    const errorDescription = searchParams.get("error_description");
+    const error_description = searchParams.get("error_description");
+
+    return {
+      state,
+      code,
+      error,
+      error_description,
+    };
+  }
+
+  private validateAuthorizeResponse(
+    { state, code, error, error_description }: AuthorizeResponse,
+    expectedState: string,
+  ) {
     if (error) {
-      throw new Error("Error during authorization", { cause: errorDescription });
+      throw new Error("Error during authorization", { cause: error_description });
     }
 
     if (!state || !code) {
       throw new Error("URL must contain state and code for the authorization flow");
     }
 
-    return {
-      state,
-      code,
-    };
+    if (expectedState !== state) {
+      throw new Error(
+        "State received during redirect does not match the state from the beginning of the OIDC ceremony",
+      );
+    }
+
+    return code;
   }
 
-  private async requestToken(code: string, codeVerifier: string, redirectUri: string, nonce: string) {
+  private async requestAndValidateTokens(
+    code: string,
+    codeVerifier: string,
+    redirectUri: string,
+    nonce: string,
+  ): Promise<Tokens> {
     const { token_endpoint, id_token_signing_alg_values_supported, acr_values_supported } = await this.getConfig();
 
     const tokenRequest: AccessTokenRequest = {
@@ -189,7 +254,11 @@ export class IdaasClient {
       idTokenSigningAlgValuesSupported: id_token_signing_alg_values_supported,
       acrValuesSupported: acr_values_supported,
     });
-    return { tokenResponse, decodedIdToken };
+
+    const issuedAt = Math.floor(Date.now() / 1000);
+    const expiresAt = Number.parseInt(tokenResponse.expires_in) + issuedAt;
+
+    return { ...tokenResponse, decodedIdToken, expiresAt };
   }
 
   private async requestTokenUsingRefreshToken(refreshToken: string): Promise<TokenResponse> {
@@ -206,7 +275,11 @@ export class IdaasClient {
   /**
    * Generate the authorization url by generating searchParams. codeVerifier will need to be stored for use after redirect.
    */
-  private async generateAuthorizationUrl(redirectUri: string, audience?: string) {
+  private async generateAuthorizationUrl(
+    responseMode: "query" | "web_message",
+    redirectUri: string,
+    audience?: string,
+  ) {
     const { authorization_endpoint } = await this.getConfig();
 
     const state = base64UrlStringEncode(createRandomString());
@@ -222,7 +295,7 @@ export class IdaasClient {
     url.searchParams.append("scope", "openid profile offline_access");
     url.searchParams.append("state", state);
     url.searchParams.append("nonce", nonce);
-    url.searchParams.append("response_mode", "query");
+    url.searchParams.append("response_mode", responseMode);
     url.searchParams.append("code_challenge", codeChallenge);
     url.searchParams.append("code_challenge_method", "S256");
 
