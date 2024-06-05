@@ -3,7 +3,7 @@ pipeline {
     booleanParam(name: "publish", defaultValue: false, description: "Publish to Artifactory")
   }
   agent {
-    label "DK_UBCOMMON2204K"
+    label "DK_UBCOMMON2404"
   }
   options {
     timestamps()
