@@ -16,7 +16,8 @@
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "outDir": "dist",
-    "sourceMap": true
+    "sourceMap": true,
+    "declaration": true
   },
   "include": ["src/*.ts"]
 }
