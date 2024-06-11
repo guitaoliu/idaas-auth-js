@@ -1,4 +1,4 @@
-import { createRemoteJWKSet, decodeJwt, decodeProtectedHeader, jwtVerify } from "jose";
+import { createRemoteJWKSet, type JWTPayload, decodeJwt, decodeProtectedHeader, jwtVerify } from "jose";
 import type { UserClaims } from "../models";
 
 interface ValidateIdTokenParams {
@@ -36,8 +36,18 @@ export const validateIdToken = ({
   if (!idToken) {
     throw new Error("No ID token supplied");
   }
-  const decodedJwt = decodeJwt(idToken);
-  const { alg } = decodeProtectedHeader(idToken);
+
+  let decodedJwt: JWTPayload;
+  let alg: string | undefined;
+
+  try {
+    decodedJwt = decodeJwt(idToken);
+    alg = decodeProtectedHeader(idToken).alg;
+  } catch {
+    // If the token is not a jwt, treat it as a JSON
+    decodedJwt = JSON.parse(JSON.stringify(idToken)); // TODO this is a workaround for TS
+    alg = "none";
+  }
 
   if (!decodedJwt.sub) {
     throw new Error("Subject (sub) claim is missing from ID token");
