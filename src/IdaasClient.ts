@@ -384,6 +384,16 @@ export class IdaasClient {
     const error = searchParams.get("error");
     const error_description = searchParams.get("error_description");
 
+    // Authorization response must always contain state
+    if (!state) {
+      return null;
+    }
+
+    // Authorization response must contain code OR error
+    if (!(code || error)) {
+      return null;
+    }
+
     url.search = "";
     window.history.replaceState(null, document.title, url.toString());
 
