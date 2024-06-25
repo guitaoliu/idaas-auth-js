@@ -1,5 +1,6 @@
 pipeline {
   parameters {
+    booleanParam(name: "RUN_TESTS", defaultValue: true, description: "If enabled, all tests will be run")
     booleanParam(name: "publish", defaultValue: false, description: "Publish to Artifactory")
   }
   agent {
@@ -11,6 +12,7 @@ pipeline {
   environment {
     CI = "true"
 
+    RUN_TESTS = "${params.RUN_TESTS}"
     NPM_CONFIG__AUTH = credentials("246abfdf-d036-4ed3-ada8-c24975556e65")
     NPM_CONFIG_EMAIL = "builder@entrustdatacard.com"
     PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/.bun/bin"
@@ -27,6 +29,14 @@ pipeline {
         sh "bun install --frozen-lockfile"
         sh "bun run ci"
       }
+    }
+    stage("🧪  Test") {
+          when {
+            environment name: "RUN_TESTS", value: "true"
+          }
+          steps {
+              sh "bun run test"
+          }
     }
     stage("📦  Publish") {
       when {
