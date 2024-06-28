@@ -1,10 +1,16 @@
 /**
  * Format string as an https url and remove any trailing /
+ *
+ * Exception: if the URL explicitly begins with http://localhost:<port>
  * @param initialUrl url string to format
  */
 export const formatUrl = (initialUrl: string): string => {
   // remove trailing /
   const finalUrl = initialUrl.endsWith("/") ? initialUrl.slice(0, -1) : initialUrl;
+  // Return if localhost url
+  if (finalUrl.startsWith("http://localhost:")) {
+    return finalUrl;
+  }
   // prepend https:// if it's not already there
   return finalUrl.startsWith("https://") ? finalUrl : `https://${finalUrl}`;
 };

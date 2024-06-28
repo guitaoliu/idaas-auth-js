@@ -22,4 +22,10 @@ describe("formatIssuerUrl", () => {
   test("does not change formatting of properly formatted url", () => {
     expect(formatUrl(expected)).toBe(expected);
   });
+
+  test("doesn't override http:// if localhost url", () => {
+    const localhostUrl = "http://localhost:3000/";
+    const formattedLocalhostUrl = "http://localhost:3000";
+    expect(formatUrl(localhostUrl)).toBe(formattedLocalhostUrl);
+  });
 });
