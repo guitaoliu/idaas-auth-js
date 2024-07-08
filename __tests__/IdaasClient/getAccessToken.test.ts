@@ -27,7 +27,7 @@ describe("IdaasClient.getAccessToken", () => {
   });
 
   // @ts-ignore private
-  const spyOnGetAccessTokens = spyOn(NO_DEFAULT_IDAAS_CLIENT.persistenceManager, "getAccessTokens");
+  const spyOnPersistenceGetAccessTokens = spyOn(NO_DEFAULT_IDAAS_CLIENT.persistenceManager, "getAccessTokens");
   // @ts-ignore not full type
   const spyOnFetch = spyOn(window, "fetch").mockImplementation(mockFetch);
   const storeToken = (token: AccessToken) => {
@@ -36,40 +36,59 @@ describe("IdaasClient.getAccessToken", () => {
   };
 
   test("fetches stored access tokens from persistenceManager", async () => {
-    await NO_DEFAULT_IDAAS_CLIENT.getAccessToken();
-    expect(spyOnGetAccessTokens).toBeCalled();
-  });
-
-  test("returns null when no access tokens stored", async () => {
-    expect(await NO_DEFAULT_IDAAS_CLIENT.getAccessToken()).toBeNull();
-    expect(spyOnGetAccessTokens.mock.results[0].value).toBeUndefined();
+    await NO_DEFAULT_IDAAS_CLIENT.getAccessToken({ fallback: "popup" });
+    expect(spyOnPersistenceGetAccessTokens).toBeCalled();
   });
 
   describe("fallback options", () => {
     const spyOnLogin = spyOn(NO_DEFAULT_IDAAS_CLIENT, "login").mockImplementation(async () => "test");
 
-    test("throws error if no suitable tokens and `fallback` is undefined", () => {
-      storeToken(TEST_ACCESS_TOKEN_OBJECT);
+    describe("with tokens stored", () => {
+      test("if no suitable tokens, throws error if `fallback` is undefined", () => {
+        storeToken(TEST_ACCESS_TOKEN_OBJECT);
 
-      expect(async () => {
-        await NO_DEFAULT_IDAAS_CLIENT.getAccessToken();
-      }).toThrowError();
+        expect(async () => {
+          await NO_DEFAULT_IDAAS_CLIENT.getAccessToken();
+        }).toThrowError();
+      });
+
+      test("if no suitable tokens, calls login with `popup: true` if `fallback` === `popup`", async () => {
+        storeToken(TEST_ACCESS_TOKEN_OBJECT);
+        await NO_DEFAULT_IDAAS_CLIENT.getAccessToken({ fallback: "popup" });
+
+        const loginRequest = spyOnLogin.mock.calls[0][0] as LoginOptions;
+        expect(loginRequest.popup).toBeTrue();
+      });
+
+      test("if no suitable tokens, calls login with `popup: false` if `fallback` === `redirect`", async () => {
+        storeToken(TEST_ACCESS_TOKEN_OBJECT);
+        await NO_DEFAULT_IDAAS_CLIENT.getAccessToken({ fallback: "redirect" });
+
+        const loginRequest = spyOnLogin.mock.calls[0][0] as LoginOptions;
+        expect(loginRequest.popup).toBeFalse();
+      });
     });
 
-    test("calls login with `popup: true` if `fallback` === `popup`", async () => {
-      storeToken(TEST_ACCESS_TOKEN_OBJECT);
-      await NO_DEFAULT_IDAAS_CLIENT.getAccessToken({ fallback: "popup" });
+    describe("with no tokens stored", () => {
+      test("throws error when no fallback specified", () => {
+        expect(async () => {
+          await NO_DEFAULT_IDAAS_CLIENT.getAccessToken();
+        }).toThrowError();
+      });
 
-      const loginRequest = spyOnLogin.mock.calls[0][0] as LoginOptions;
-      expect(loginRequest.popup).toBeTrue();
-    });
+      test("calls login with `popup: true` if `fallback` === `popup`", async () => {
+        await NO_DEFAULT_IDAAS_CLIENT.getAccessToken({ fallback: "popup" });
 
-    test("calls login with `popup: false` if `fallback` === `redirect`", async () => {
-      storeToken(TEST_ACCESS_TOKEN_OBJECT);
-      await NO_DEFAULT_IDAAS_CLIENT.getAccessToken({ fallback: "redirect" });
+        const loginRequest = spyOnLogin.mock.calls[0][0] as LoginOptions;
+        expect(loginRequest.popup).toBeTrue();
+      });
 
-      const loginRequest = spyOnLogin.mock.calls[0][0] as LoginOptions;
-      expect(loginRequest.popup).toBeFalse();
+      test("calls login with `popup: false` if `fallback` === `redirect`", async () => {
+        await NO_DEFAULT_IDAAS_CLIENT.getAccessToken({ fallback: "redirect" });
+
+        const loginRequest = spyOnLogin.mock.calls[0][0] as LoginOptions;
+        expect(loginRequest.popup).toBeFalse();
+      });
     });
   });
 

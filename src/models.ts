@@ -71,6 +71,6 @@ export interface GetAccessTokenOptions {
   audience?: string;
   scope?: string;
   fallback?: "redirect" | "popup";
-  redirectUri?: string;
+  fallbackRedirectUri?: string;
   useRefreshToken?: boolean;
 }

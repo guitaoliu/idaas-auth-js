@@ -93,7 +93,7 @@ export class IdaasClient {
     redirectUri,
     useRefreshToken,
   }: LoginOptions): Promise<string | null> {
-    redirectUri = redirectUri ?? window.location.origin;
+    redirectUri = redirectUri ?? window.location.href;
 
     const { url, nonce, state, codeVerifier } = await this.generateAuthorizationUrl(
       "web_message",
@@ -129,7 +129,7 @@ export class IdaasClient {
    *
    */
   private async loginWithRedirect({ audience, scope, redirectUri, useRefreshToken }: LoginOptions) {
-    redirectUri = redirectUri ?? window.location.origin;
+    redirectUri = redirectUri ?? window.location.href;
 
     const { url, nonce, state, codeVerifier } = await this.generateAuthorizationUrl(
       "query",
@@ -221,80 +221,77 @@ export class IdaasClient {
    * @param audience the audience of the token to be fetched
    * @param scope the scope of the token to be fetched
    * @param fallback the method to use to fetch the requested token if it is not stored
-   * @param redirectUri the URI to redirect to after execution of a `fallback` method.
+   * @param fallbackRedirectUri the URI to redirect to after execution of a `fallback` method.
    * @param useRefreshToken determines if the new token returned by the fallback method can use refresh tokens.
    */
   public async getAccessToken({
     audience = this.defaultAudience,
     scope = this.defaultScope,
     fallback,
-    redirectUri,
+    fallbackRedirectUri = window.location.href,
     useRefreshToken,
   }: GetAccessTokenOptions = {}): Promise<string | null> {
     const accessTokens = this.persistenceManager.getAccessTokens();
     const requestedScopes = scope.split(" ");
 
-    // No access tokens stored
-    if (!accessTokens) {
-      return null;
-    }
+    if (accessTokens) {
+      // 1. Find all tokens with the required audience that possess all required scopes
+      // Tokens that have the required audience
+      const tokensWithAudience = accessTokens.filter((token) => token.audience === audience);
 
-    // 1. Find all tokens with the required audience that possess all required scopes
-    // Tokens that have the required audience
-    const tokensWithAudience = accessTokens.filter((token) => token.audience === audience);
+      // Tokens that have the required audience and all scopes
+      const possibleTokens = tokensWithAudience.filter((token) => {
+        const tokenScopes = token.scope.split(" ");
+        return requestedScopes.every((scope) => tokenScopes.includes(scope));
+      });
 
-    // Tokens that have the required audience and all scopes
-    const possibleTokens = tokensWithAudience.filter((token) => {
-      const tokenScopes = token.scope.split(" ");
-      return requestedScopes.every((scope) => tokenScopes.includes(scope));
-    });
+      // Sorts tokens by number of scopes in ascending order
+      const sortedPossibleTokens = possibleTokens.sort(
+        (token1, token2) => token1.scope.split(" ").length - token2.scope.split(" ").length,
+      );
 
-    // Sorts tokens by number of scopes in ascending order
-    const sortedPossibleTokens = possibleTokens.sort(
-      (token1, token2) => token1.scope.split(" ").length - token2.scope.split(" ").length,
-    );
+      // 2. Moving from the tokens found above with the fewest number of scopes to those with the most number of scopes
+      // - If the token is not expired, return it
+      // - If the token is expired and not refreshable, remove it from storage
+      // - If the token is expired but refreshable, refresh it, remove it from storage, store the refreshed token, then return the refreshed token
+      for (const possibleAccessToken of sortedPossibleTokens) {
+        const { refreshToken, accessToken, expiresAt, scope, audience } = possibleAccessToken;
+        // buffer (in seconds) to refresh early, ensuring unexpired token is returned
+        const buffer = 15;
 
-    // 2. Moving from the tokens found above with the fewest number of scopes to those with the most number of scopes
-    // - If the token is not expired, return it
-    // - If the token is expired and not refreshable, remove it from storage
-    // - If the token is expired but refreshable, refresh it, remove it from storage, store the refreshed token, then return the refreshed token
-    for (const possibleAccessToken of sortedPossibleTokens) {
-      const { refreshToken, accessToken, expiresAt, scope, audience } = possibleAccessToken;
-      // buffer (in seconds) to refresh early, ensuring unexpired token is returned
-      const buffer = 15;
+        const now = new Date();
+        const expDate = new Date((expiresAt - buffer) * 1000);
 
-      const now = new Date();
-      const expDate = new Date((expiresAt - buffer) * 1000);
+        // Token not expired
+        if (expDate > now) {
+          return accessToken;
+        }
 
-      // Token not expired
-      if (expDate > now) {
-        return accessToken;
-      }
+        // No refresh token
+        if (!refreshToken) {
+          this.persistenceManager.removeAccessToken(possibleAccessToken);
+          continue;
+        }
+        const {
+          refresh_token: newRefreshToken,
+          access_token: newEncodedAccessToken,
+          expires_in,
+        } = await this.requestTokenUsingRefreshToken(refreshToken);
+        const newExpiration = expiryToEpochSeconds(expires_in);
 
-      // No refresh token
-      if (!refreshToken) {
+        // the refreshed access token to be stored, maintaining expired token's scope and audience
+        const newAccessToken: AccessToken = {
+          accessToken: newEncodedAccessToken,
+          refreshToken: newRefreshToken,
+          expiresAt: newExpiration,
+          audience,
+          scope,
+        };
+
         this.persistenceManager.removeAccessToken(possibleAccessToken);
-        continue;
+        this.persistenceManager.saveAccessToken(newAccessToken);
+        return newEncodedAccessToken;
       }
-      const {
-        refresh_token: newRefreshToken,
-        access_token: newEncodedAccessToken,
-        expires_in,
-      } = await this.requestTokenUsingRefreshToken(refreshToken);
-      const newExpiration = expiryToEpochSeconds(expires_in);
-
-      // the refreshed access token to be stored, maintaining expired token's scope and audience
-      const newAccessToken: AccessToken = {
-        accessToken: newEncodedAccessToken,
-        refreshToken: newRefreshToken,
-        expiresAt: newExpiration,
-        audience,
-        scope,
-      };
-
-      this.persistenceManager.removeAccessToken(possibleAccessToken);
-      this.persistenceManager.saveAccessToken(newAccessToken);
-      return newEncodedAccessToken;
     }
 
     // 3. If no suitable tokens were found or all suitable tokens were expired and not refreshable, determine how to proceed based on the 'fallback' param
@@ -303,16 +300,16 @@ export class IdaasClient {
       await this.login({
         scope,
         audience,
-        redirectUri,
+        redirectUri: fallbackRedirectUri,
         useRefreshToken,
         popup: false,
       });
 
-      // not possible to retrieve the access token created from redirect login flow, return undefined
+      // not possible to retrieve the access token created from redirect login flow, return null
       return null;
     }
     if (fallback === "popup") {
-      return await this.login({ audience, scope, popup: true, useRefreshToken });
+      return await this.login({ audience, scope, popup: true, useRefreshToken, redirectUri: fallbackRedirectUri });
     }
 
     throw new Error("Requested token not found, no fallback method specified");
@@ -485,7 +482,7 @@ export class IdaasClient {
    */
   private async generateAuthorizationUrl(
     responseMode: "query" | "web_message",
-    redirectUri: string = window.location.origin,
+    redirectUri: string = window.location.href,
     refreshToken: boolean = this.defaultUseRefreshToken,
     scope: string = this.defaultScope,
     audience: string | undefined = this.defaultAudience,
