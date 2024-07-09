@@ -35,16 +35,16 @@ export class IdaasClient {
   private readonly persistenceManager: PersistenceManager;
   private readonly issuerUrl: string;
   private readonly clientId: string;
-  private readonly defaultScope: string;
-  private readonly defaultAudience: string | undefined;
-  private readonly defaultUseRefreshToken: boolean;
+  private readonly globalScope: string;
+  private readonly globalAudience: string | undefined;
+  private readonly globalUseRefreshToken: boolean;
 
   private config?: OidcConfig;
 
-  constructor({ issuerUrl, clientId, defaultAudience, defaultScope, defaultUseRefreshToken }: IdaasClientOptions) {
-    this.defaultAudience = defaultAudience;
-    this.defaultScope = defaultScope ?? "openid profile email";
-    this.defaultUseRefreshToken = defaultUseRefreshToken ?? false;
+  constructor({ issuerUrl, clientId, globalAudience, globalScope, globalUseRefreshToken }: IdaasClientOptions) {
+    this.globalAudience = globalAudience;
+    this.globalScope = globalScope ?? "openid profile email";
+    this.globalUseRefreshToken = globalUseRefreshToken ?? false;
     this.issuerUrl = formatUrl(issuerUrl);
     this.persistenceManager = new PersistenceManager(clientId);
     this.clientId = clientId;
@@ -184,7 +184,7 @@ export class IdaasClient {
    * Fetch the user information stored in the id_token
    * @returns returns the decodedIdToken containing the user info.
    */
-  public getIdToken(): UserClaims | null {
+  public getIdTokenClaims(): UserClaims | null {
     const idToken = this.persistenceManager.getIdToken();
     if (!idToken?.decoded) {
       return null;
@@ -225,16 +225,12 @@ export class IdaasClient {
    *
    * @param audience the audience of the token to be fetched
    * @param scope the scope of the token to be fetched
-   * @param fallback the method to use to fetch the requested token if it is not stored
-   * @param fallbackRedirectUri the URI to redirect to after execution of a `fallback` method.
-   * @param useRefreshToken determines if the new token returned by the fallback method can use refresh tokens.
+   * @param fallbackAuthorizationOptions the parameters of the login call that will be made if a token with the requested audience and scope is not found.
    */
   public async getAccessToken({
-    audience = this.defaultAudience,
-    scope = this.defaultScope,
-    fallback,
-    fallbackRedirectUri = window.location.href,
-    useRefreshToken,
+    audience = this.globalAudience,
+    scope = this.globalScope,
+    fallbackAuthorizationOptions,
   }: GetAccessTokenOptions = {}): Promise<string | null> {
     const accessTokens = this.persistenceManager.getAccessTokens();
     const requestedScopes = scope.split(" ");
@@ -299,25 +295,15 @@ export class IdaasClient {
       }
     }
 
-    // 3. If no suitable tokens were found or all suitable tokens were expired and not refreshable, determine how to proceed based on the 'fallback' param
+    // 3. If no suitable tokens were found or all suitable tokens were expired and not refreshable, attempt to login using the fallbackAuthorizationOptions
     // No suitable tokens found
-    if (fallback === "redirect") {
-      await this.login({
-        scope,
-        audience,
-        redirectUri: fallbackRedirectUri,
-        useRefreshToken,
-        popup: false,
-      });
+    if (fallbackAuthorizationOptions) {
+      const { redirectUri, useRefreshToken, popup } = fallbackAuthorizationOptions;
 
-      // not possible to retrieve the access token created from redirect login flow, return null
-      return null;
-    }
-    if (fallback === "popup") {
-      return await this.login({ audience, scope, popup: true, useRefreshToken, redirectUri: fallbackRedirectUri });
+      return await this.login({ scope, audience, popup, useRefreshToken, redirectUri });
     }
 
-    throw new Error("Requested token not found, no fallback method specified");
+    throw new Error("Requested token not found, no fallback login specified");
   }
 
   private parseAndSaveTokenResponse(validatedTokenResponse: ValidatedTokenResponse) {
@@ -488,9 +474,9 @@ export class IdaasClient {
   private async generateAuthorizationUrl(
     responseMode: "query" | "web_message",
     redirectUri: string = window.location.href,
-    refreshToken: boolean = this.defaultUseRefreshToken,
-    scope: string = this.defaultScope,
-    audience: string | undefined = this.defaultAudience,
+    refreshToken: boolean = this.globalUseRefreshToken,
+    scope: string = this.globalScope,
+    audience: string | undefined = this.globalAudience,
   ) {
     const { authorization_endpoint } = await this.getConfig();
     const scopeAsArray = scope.split(" ");

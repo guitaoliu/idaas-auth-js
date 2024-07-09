@@ -23,7 +23,7 @@ const updateUI = async () => {
   } catch {
     // Purposefully empty
   }
-  const idToken = idaasClient.getIdToken();
+  const idToken = idaasClient.getIdTokenClaims();
 
   const idTokenField = document.getElementById("id-token-state");
   if (idTokenField) {

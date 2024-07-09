@@ -35,8 +35,8 @@ export const NO_DEFAULT_IDAAS_CLIENT = new IdaasClient({
 export const SET_DEFAULTS_IDAAS_CLIENT = new IdaasClient({
   issuerUrl: TEST_ISSUER_URI,
   clientId: TEST_CLIENT_ID,
-  defaultScope: TEST_DIFFERENT_SCOPE,
-  defaultAudience: TEST_DIFFERENT_AUDIENCE,
+  globalScope: TEST_DIFFERENT_SCOPE,
+  globalAudience: TEST_DIFFERENT_AUDIENCE,
 });
 
 export const TEST_TOKEN_PARAMS: TokenParams = {

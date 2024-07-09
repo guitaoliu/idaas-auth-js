@@ -1,7 +1,7 @@
 import { afterAll, afterEach, describe, expect, jest, test } from "bun:test";
 import { NO_DEFAULT_IDAAS_CLIENT, TEST_ID_PAIR } from "../constants";
 
-describe("IdaasClient.getIdToken", () => {
+describe("IdaasClient.getIdTokenClaims", () => {
   afterAll(() => {
     jest.restoreAllMocks();
   });
@@ -14,14 +14,14 @@ describe("IdaasClient.getIdToken", () => {
   test("if user info is stored, returns the user info", () => {
     localStorage.setItem(TEST_ID_PAIR.key, JSON.stringify(TEST_ID_PAIR.data));
 
-    const user = NO_DEFAULT_IDAAS_CLIENT.getIdToken();
+    const user = NO_DEFAULT_IDAAS_CLIENT.getIdTokenClaims();
 
     expect(user).toBeTruthy();
     expect(user.sub).toStrictEqual(TEST_ID_PAIR.data.decoded.sub);
   });
 
   test("if user info is not stored, returns null", () => {
-    const user = NO_DEFAULT_IDAAS_CLIENT.getIdToken();
+    const user = NO_DEFAULT_IDAAS_CLIENT.getIdTokenClaims();
 
     expect(user).toBeNull();
   });
