@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { formatUrl } from "../src/utils/format";
+import { formatUrl, sanitizeUri } from "../src/utils/format";
 
 describe("formatIssuerUrl", () => {
   const expected = "https://test.com";
@@ -28,4 +28,9 @@ describe("formatIssuerUrl", () => {
     const formattedLocalhostUrl = "http://localhost:3000";
     expect(formatUrl(localhostUrl)).toBe(formattedLocalhostUrl);
   });
+});
+
+test("removes trailing '?'", () => {
+  const url = "https://test.com/?";
+  expect(sanitizeUri(url)).toBe("https://test.com/");
 });

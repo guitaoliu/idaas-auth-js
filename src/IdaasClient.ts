@@ -19,7 +19,7 @@ import type {
 } from "./models";
 import { listenToPopup, openPopup } from "./utils/browser";
 import { base64UrlStringEncode, createRandomString, generateChallengeVerifierPair } from "./utils/crypto";
-import { expiryToEpochSeconds, formatUrl } from "./utils/format";
+import { expiryToEpochSeconds, formatUrl, sanitizeUri } from "./utils/format";
 import { validateIdToken, validateUserInfoToken } from "./utils/jwt";
 
 /**
@@ -96,6 +96,7 @@ export class IdaasClient {
     useRefreshToken,
   }: LoginOptions): Promise<string | null> {
     redirectUri = redirectUri ?? window.location.href;
+    redirectUri = sanitizeUri(redirectUri);
 
     const { url, nonce, state, codeVerifier } = await this.generateAuthorizationUrl(
       "web_message",
@@ -132,6 +133,7 @@ export class IdaasClient {
    */
   private async loginWithRedirect({ audience, scope, redirectUri, useRefreshToken }: LoginOptions) {
     redirectUri = redirectUri ?? window.location.href;
+    redirectUri = sanitizeUri(redirectUri);
 
     const { url, nonce, state, codeVerifier } = await this.generateAuthorizationUrl(
       "query",

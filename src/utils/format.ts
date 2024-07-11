@@ -23,3 +23,13 @@ export const expiryToEpochSeconds = (expiresIn: string): number => {
   const issuedAt = Math.floor(Date.now() / 1000);
   return Number.parseInt(expiresIn) + issuedAt;
 };
+
+/**
+ * Sanitizes the passed URI clearing searchParams
+ * @param redirectUri the uri to sanitize
+ */
+export const sanitizeUri = (redirectUri: string): string => {
+  const sanitizedUrl = new URL(redirectUri);
+  sanitizedUrl.search = "";
+  return sanitizedUrl.toString();
+};
