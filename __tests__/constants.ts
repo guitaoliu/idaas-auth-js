@@ -125,22 +125,30 @@ export const TEST_TOKEN_RESPONSE: TokenResponse = {
   token_type: "Bearer",
 };
 
+export const TEST_ACCESS_TOKEN_KEY = `entrust.${TEST_CLIENT_ID}.accessTokens`;
+
 export const TEST_ACCESS_PAIR = {
-  key: `entrust.accessTokens.${TEST_CLIENT_ID}`,
+  key: TEST_ACCESS_TOKEN_KEY,
   data: [TEST_ACCESS_TOKEN_OBJECT],
 };
 
+export const TEST_ID_TOKEN_KEY = `entrust.${TEST_CLIENT_ID}.idToken`;
+
 export const TEST_ID_PAIR = {
-  key: `entrust.idToken.${TEST_CLIENT_ID}`,
+  key: TEST_ID_TOKEN_KEY,
   data: TEST_ID_TOKEN_OBJECT,
 };
 
+export const TEST_CLIENT_PARAMS_KEY = `entrust.${TEST_CLIENT_ID}.clientParams`;
+
 export const TEST_CLIENT_PAIR = {
-  key: `entrust.clientParams.${TEST_CLIENT_ID}`,
+  key: TEST_CLIENT_PARAMS_KEY,
   data: TEST_CLIENT_PARAMS,
 };
 
+export const TEST_TOKEN_PARAMS_KEY = `entrust.${TEST_CLIENT_ID}.tokenParams`;
+
 export const TEST_TOKEN_PAIR = {
-  key: `entrust.tokenParams.${TEST_CLIENT_ID}`,
+  key: TEST_TOKEN_PARAMS_KEY,
   data: TEST_TOKEN_PARAMS,
 };

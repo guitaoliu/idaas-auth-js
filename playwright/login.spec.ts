@@ -1,6 +1,10 @@
 import { type Page, expect, test } from "@playwright/test";
 import { CLIENT_ID, DEV_SERVER, ISSUER, PASSWORD, USERNAME } from "./test-app/constants";
 
+const CLIENT_PARAMS_KEY = `entrust.${CLIENT_ID}.clientParams`;
+const ACCESS_TOKENS_KEY = `entrust.${CLIENT_ID}.accessTokens`;
+const ID_TOKENS_KEY = `entrust.${CLIENT_ID}.idToken`;
+
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
@@ -49,10 +53,10 @@ test("login with popup", async ({ page }) => {
   // Token stored in local storage should match the one from the response
   const storage = await page.context().storageState();
   const accessTokens = storage.origins[0].localStorage.find(({ name }) => {
-    return name === `entrust.accessTokens.${CLIENT_ID}`;
+    return name === ACCESS_TOKENS_KEY;
   });
   const idToken = storage.origins[0].localStorage.find(({ name }) => {
-    return name === `entrust.idToken.${CLIENT_ID}`;
+    return name === ID_TOKENS_KEY;
   });
 
   expect(accessTokens).toBeTruthy();
@@ -96,7 +100,7 @@ test("login with redirect", async ({ page }) => {
 
   // Client state in local storage should match the returning url state
   const clientParams = storage.origins[0].localStorage.find(({ name }) => {
-    return name === `entrust.clientParams.${CLIENT_ID}`;
+    return name === CLIENT_PARAMS_KEY;
   });
   expect(clientParams).toBeTruthy();
   // Should always be true
@@ -118,10 +122,10 @@ test("login with redirect", async ({ page }) => {
   // Token stored in local storage should match the one from the response
   storage = await page.context().storageState();
   const accessTokens = storage.origins[0].localStorage.find(({ name }) => {
-    return name === `entrust.accessTokens.${CLIENT_ID}`;
+    return name === ACCESS_TOKENS_KEY;
   });
   const idToken = storage.origins[0].localStorage.find(({ name }) => {
-    return name === `entrust.idToken.${CLIENT_ID}`;
+    return name === ID_TOKENS_KEY;
   });
 
   expect(accessTokens).toBeTruthy();

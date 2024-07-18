@@ -4,9 +4,11 @@ import type { AuthorizeResponse } from "../../src/models";
 import * as jwt from "../../src/utils/jwt";
 import {
   NO_DEFAULT_IDAAS_CLIENT,
+  TEST_ACCESS_TOKEN_KEY,
   TEST_BASE_URI,
   TEST_CLIENT_ID,
   TEST_CODE,
+  TEST_ID_TOKEN_KEY,
   TEST_ID_TOKEN_OBJECT,
   TEST_STATE,
   TEST_TOKEN_PARAMS,
@@ -87,7 +89,7 @@ describe("IdaasClient.handleRedirect", () => {
     const response = spyOnParseRedirectSearchParams.mock.results[0].value as AuthorizeResponse | null;
 
     expect(validationResultType).toStrictEqual("throw");
-    expect(response.error).toStrictEqual("error");
+    expect(response?.error).toStrictEqual("error");
   });
 
   test("throws error if expected state and current state differ", () => {
@@ -159,7 +161,7 @@ describe("IdaasClient.handleRedirect", () => {
 
       await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
 
-      expect(localStorage.getItem(`entrust.idToken.${TEST_CLIENT_ID}`)).not.toBeNull();
+      expect(localStorage.getItem(TEST_ID_TOKEN_KEY)).not.toBeNull();
     });
 
     test("stores the given access token", async () => {
@@ -168,7 +170,7 @@ describe("IdaasClient.handleRedirect", () => {
 
       await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
 
-      expect(localStorage.getItem(`entrust.accessTokens.${TEST_CLIENT_ID}`)).not.toBeNull();
+      expect(localStorage.getItem(TEST_ACCESS_TOKEN_KEY)).not.toBeNull();
     });
 
     test("the access token contains the correct information", async () => {

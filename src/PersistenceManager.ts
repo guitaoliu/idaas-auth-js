@@ -56,10 +56,10 @@ export class PersistenceManager {
   private readonly tokenParamsStorageKey: string;
 
   constructor(clientId: string) {
-    this.clientParamsStorageKey = `entrust.clientParams.${clientId}`;
-    this.accessTokenStorageKey = `entrust.accessTokens.${clientId}`;
-    this.idTokenStorageKey = `entrust.idToken.${clientId}`;
-    this.tokenParamsStorageKey = `entrust.tokenParams.${clientId}`;
+    this.clientParamsStorageKey = `entrust.${clientId}.clientParams`;
+    this.accessTokenStorageKey = `entrust.${clientId}.accessTokens`;
+    this.idTokenStorageKey = `entrust.${clientId}.idToken`;
+    this.tokenParamsStorageKey = `entrust.${clientId}.tokenParams`;
   }
 
   /**
