@@ -1,7 +1,8 @@
 {
   "name": "@entrust/idaas-auth-spa",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "description": "",
+  "license": "Apache-2.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/types/index.d.ts",
@@ -14,6 +15,7 @@
     "@types/oidc-provider": "8.4.4",
     "@types/web": "0.0.143",
     "oidc-provider": "8.4.7",
+    "publint": "0.2.9",
     "typescript": "5.4.5"
   },
   "scripts": {
