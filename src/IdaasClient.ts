@@ -11,6 +11,7 @@ import {
 } from "./api";
 import type {
   AuthorizeResponse,
+  FallbackAuthorizationOptions,
   GetAccessTokenOptions,
   IdaasClientOptions,
   LoginOptions,
@@ -56,15 +57,15 @@ export class IdaasClient {
    *
    * If using redirect (i.e. popup=false), your application must also be configured to call handleRedirect at the redirectUri
    * to complete the flow.
-   *
-   * @param redirectUri to navigate to after a successful authentication
-   * @param audience the intended audience for the received access token once login is complete
-   * @param scope the intended scope for the received access token once login is complete
-   * @param useRefreshToken determines if the received access token can be refreshed using refresh tokens
-   * @param popup whether the authentication will occur in a new popup window, defaults to false. When false the browser will
-   *  navigate to the OP to authenticate the user.
-   */
-  public async login({ audience, scope, redirectUri, useRefreshToken = false, popup = false }: LoginOptions = {}) {
+   * */
+  public async login({
+    audience,
+    scope,
+    redirectUri,
+    useRefreshToken = false,
+    popup = false,
+    acrValues,
+  }: LoginOptions = {}) {
     if (popup) {
       const popupWindow = openPopup("");
       const { response_modes_supported } = await this.getConfig();
@@ -73,27 +74,23 @@ export class IdaasClient {
         popupWindow.close();
         throw new Error("Attempting to use popup but web_message is not supported by OpenID provider.");
       }
-      return await this.loginWithPopup({ audience, scope, redirectUri, useRefreshToken });
+      return await this.loginWithPopup({ audience, scope, redirectUri, useRefreshToken, acrValues });
     }
 
-    await this.loginWithRedirect({ audience, scope, redirectUri, useRefreshToken });
+    await this.loginWithRedirect({ audience, scope, redirectUri, useRefreshToken, acrValues });
 
     return null;
   }
 
   /**
    * Perform the authorization code flow using a new popup window at the OpenID Provider (OP) to authenticate the user.
-   *
-   * @param redirectUri to navigate to after a successful authentication
-   * @param audience the intended audience for the received access token once login is complete
-   * @param scope the intended scope for the received access token once login is complete
-   * @param useRefreshToken determines if the received access token can be refreshed using refresh tokens
    */
   private async loginWithPopup({
     audience,
     scope,
     redirectUri,
     useRefreshToken,
+    acrValues,
   }: LoginOptions): Promise<string | null> {
     const finalRedirectUri = redirectUri ?? sanitizeUri(window.location.href);
 
@@ -103,6 +100,7 @@ export class IdaasClient {
       useRefreshToken,
       scope,
       audience,
+      acrValues,
     );
 
     const popup = openPopup(url);
@@ -128,14 +126,8 @@ export class IdaasClient {
   /**
    * Perform the authorization code flow by redirecting to the OpenID Provider (OP) to authenticate the user and then redirect
    * with the necessary state and code.
-   *
-   * @param redirectUri to navigate to after a successful authentication
-   * @param audience the intended audience for the received access token once login is complete
-   * @param scope the intended scope for the received access token once login is complete
-   * @param useRefreshToken determines if the received access token can be refreshed using refresh tokens
-   *
    */
-  private async loginWithRedirect({ audience, scope, redirectUri, useRefreshToken }: LoginOptions) {
+  private async loginWithRedirect({ audience, scope, redirectUri, useRefreshToken, acrValues }: LoginOptions) {
     const finalRedirectUri = redirectUri ?? sanitizeUri(window.location.href);
 
     const { url, nonce, state, codeVerifier } = await this.generateAuthorizationUrl(
@@ -144,6 +136,7 @@ export class IdaasClient {
       useRefreshToken,
       scope,
       audience,
+      acrValues,
     );
 
     this.persistenceManager.saveClientParams({
@@ -199,9 +192,6 @@ export class IdaasClient {
 
   /**
    * Clear the application session and navigate to the OpenID Provider's (OP) endsession endpoint.
-   *
-   * @param redirectUri optional url to redirect to after logout, must be one of the allowed logout redirect URLs defined
-   * in the OIDC application. If not provided, the user will remain at the OP.
    */
   public async logout({ redirectUri }: LogoutOptions = {}) {
     if (!this.isAuthenticated()) {
@@ -216,16 +206,7 @@ export class IdaasClient {
 
   /**
    * Returns an access token with the required scopes and audience that is unexpired or refreshable.
-   * The `fallback` parameter determines the result if there are no access tokens with the required scopes and audience that are unexpired or refreshable.
-   *
-   * To store and return an access token with the required scopes and audience if there are none available, set `fallback` to `popup`.
-   * To store an access token with the required scopes and audience if there are none available, set `fallback` to `redirect`.
-   *
-   * @throws error if there are no access tokens with the required scopes and audience that are unexpired or refreshable, and `fallback` is not specified.
-   *
-   * @param audience the audience of the token to be fetched
-   * @param scope the scope of the token to be fetched
-   * @param fallbackAuthorizationOptions the parameters of the login call that will be made if a token with the requested audience and scope is not found.
+   * The `fallbackAuthorizationOptions` parameter determines the result if there are no access tokens with the required scopes and audience that are unexpired or refreshable.
    */
   public async getAccessToken({
     audience = this.globalAudience,
@@ -328,6 +309,55 @@ export class IdaasClient {
 
     this.persistenceManager.saveIdToken({ encoded: encodedIdToken, decoded: decodedIdToken });
     this.persistenceManager.saveAccessToken(newAccessToken);
+  }
+
+  /**
+   * Returns true if `desired` is defined and included in `arr`.
+   *
+   * @param arr the array of options
+   * @param desired the element to search for
+   */
+  private isIncluded = (arr: string[], desired: string | undefined): boolean => {
+    if (!desired) {
+      return false;
+    }
+
+    return arr.includes(desired);
+  };
+
+  private getIdTokenAcr = (): string | undefined => {
+    const idToken = this.persistenceManager.getIdToken();
+    return idToken?.decoded.acr as string | undefined;
+  };
+
+  /**
+   * Determines if the current ID token's acr claim is an element in `desiredAcr`.
+   * If `fallbackAuthorization` is defined and the current ID token's acr claim is not desired, a login will be attempted to fetch an ID token with an acr claim that is an element in `desiredAcr`.
+   *
+   * @param desiredAcr an array of acr values that are acceptable for the ID token to have
+   * @param fallbackAuthorization the fallback login options to retrieve an ID token with desiredAcr
+   */
+  public async isAcrDesired({
+    desiredAcr,
+    fallbackAuthorization,
+  }: { desiredAcr: string[]; fallbackAuthorization?: FallbackAuthorizationOptions }): Promise<boolean> {
+    const currentAcr = this.getIdTokenAcr();
+
+    // no fallback specified, so return the result regardless
+    if (!fallbackAuthorization) {
+      return this.isIncluded(desiredAcr, currentAcr);
+    }
+
+    // fallback specified, return only if currentAcr is desired
+    if (this.isIncluded(desiredAcr, currentAcr)) {
+      return true;
+    }
+
+    // not authenticated and/or ID token does not have desired acr claim, login with the desired acr claim
+    await this.login({ ...fallbackAuthorization, acrValues: desiredAcr });
+
+    // check if new ID token has desired acr claim
+    return this.isIncluded(desiredAcr, this.getIdTokenAcr());
   }
 
   /**
@@ -477,6 +507,7 @@ export class IdaasClient {
     refreshToken: boolean = this.globalUseRefreshToken,
     scope: string = this.globalScope,
     audience: string | undefined = this.globalAudience,
+    acrValues: string[] = [],
   ) {
     const { authorization_endpoint } = await this.getConfig();
     const scopeAsArray = scope.split(" ");
@@ -507,6 +538,18 @@ export class IdaasClient {
     // Note: The PKCE spec defines an additional code_challenge_method 'plain', but it is explicitly NOT recommended
     // https://datatracker.ietf.org/doc/html/rfc7636#section-7.2
     url.searchParams.append("code_challenge_method", "S256");
+
+    if (acrValues.length > 0) {
+      const claimRequest = JSON.stringify({
+        id_token: {
+          acr: {
+            essential: true,
+            values: acrValues,
+          },
+        },
+      });
+      url.searchParams.append("claims", claimRequest);
+    }
 
     this.persistenceManager.saveTokenParams({ audience, scope: usedScope });
 

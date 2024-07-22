@@ -26,6 +26,7 @@ export const TEST_JWKS_ENDPOINT = `${TEST_BASE_URI}/jwks`;
 export const TEST_DIFFERENT_SCOPE = "different scope";
 export const TEST_DIFFERENT_AUDIENCE = "differentAudience";
 export const TEST_DIFFERENT_ACCESS_TOKEN = "differentAccessToken";
+export const TEST_ACR_CLAIM = "testingacrclaim";
 
 export const NO_DEFAULT_IDAAS_CLIENT = new IdaasClient({
   issuerUrl: TEST_ISSUER_URI,
@@ -89,7 +90,7 @@ export const TEST_VALIDATE_ID_TOKEN_PARAMS: ValidateIdTokenParams = {
 
 export const TEST_ID_TOKEN_OBJECT: IdToken = {
   encoded: TEST_ID_TOKEN,
-  decoded: { sub: TEST_SUB_CLAIM },
+  decoded: { sub: TEST_SUB_CLAIM, acr: TEST_ACR_CLAIM },
 };
 
 export const TEST_OIDC_CONFIG: OidcConfig = {

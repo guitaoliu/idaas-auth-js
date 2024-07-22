@@ -34,6 +34,7 @@ export interface AccessTokenRequest {
   code_verifier: string;
   redirect_uri: string;
   client_id: string;
+  claims?: string;
 }
 
 /**

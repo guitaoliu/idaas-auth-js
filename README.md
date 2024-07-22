@@ -177,7 +177,29 @@ document
   });
 ```
 
-## Getting Information About the Logged-in User
+## User Authentication
+
+Authentication status is determined by the presence of an ID token. If an ID token is stored, the user is authenticated.
+
+```html
+<button id="check-authentication">Click to Check Authentication Status</button>
+```
+
+```typescript
+document
+  .getElementById("check-authentication")
+  .addEventListener("click", () => {
+    const isAuthenticated = idaasClient.isAuthenticated();
+
+    if (isAuthenticated) {
+      console.log("User is authenticated");
+    } else {
+      console.log("User is not authenticated");
+    }
+  });
+```
+
+### Getting Information About the Logged-in User
 
 ```html
 <button id="get-information">Click to get Information</button>
@@ -193,7 +215,7 @@ document
   });
 ```
 
-## Fetching the stored ID token
+### Fetching the Stored ID Token
 
 ```html
 <button id="get-id-token">Click to get ID token</button>
@@ -207,24 +229,42 @@ document.getElementById("get-id-token").addEventListener("click", () => {
 });
 ```
 
-## Checking if the User is Authenticated
+### Verify the Method of Authentication
 
-Authentication status is determined by the presence of an ID token. If an ID token is stored, the user is authenticated.
+An ID token's acr claim communicates the method of authentication that the user used to authenticate. This can be used to lock access behind different authentication methods.
 
 ```html
-<button id="check-authentication">Click to Check Authentication Status</button>
+<button id="verify-auth-method">Click to Verify the Authentication Method</button>
 ```
 
 ```typescript
-document
-    .getElementById("check-authentication")
-    .addEventListener("click", () => {
-        const isAuthenticated = idaasClient.isAuthenticated();
+document.getElementById("verify-auth-method").addEventListener("click", () => {
+  const desiredMethods = ["level_1", "level_2"];
 
-        if (isAuthenticated) {
-            console.log("User is authenticated");
-        } else {
-            console.log("User is not authenticated");
-        }
-    });
+  if (idaasClient.isAcrDesired({ desiredAcr: desiredMethods })) {
+    console.log("The current ID token's acr claim is desired");
+  } else {
+    console.log("The current ID token's acr claim is not desired");
+  }
+});
+```
+
+If the current ID token does not have a desired acr claim, you can specify additional parameters to attempt a login to retrieve a new ID token with a desired acr claim.
+
+```typescript
+document.getElementById("determine-auth-method").addEventListener("click", () => {
+  const desiredMethods = ["level_1", "level_2"];
+
+  if (
+    idaasClient.isAcrDesired({
+      desiredAcr: desiredMethods,
+      // login with popup if the current ID token does not have a desired acr claim
+      fallbackAuthorization: { popup: true },
+    })
+  ) {
+    console.log("The ID token's acr claim is desired");
+  } else {
+    console.log("The ID token's acr claim is not desired");
+  }
+});
 ```

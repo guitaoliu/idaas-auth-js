@@ -71,6 +71,11 @@ export interface LoginOptions {
    * The default setting is `false`.
    */
   popup?: boolean;
+
+  /**
+   * Determines the strength/quality of the method used to authenticate the user.
+   */
+  acrValues?: string[];
 }
 
 /**
@@ -105,6 +110,11 @@ export interface FallbackAuthorizationOptions {
    * The default setting is `false`.
    */
   popup?: boolean;
+
+  /**
+   * Determines the strength/quality of the method used to authenticate the user.
+   */
+  acrValues?: string[];
 }
 
 /**

@@ -6,6 +6,7 @@ import {
   NO_DEFAULT_IDAAS_CLIENT,
   SET_DEFAULTS_IDAAS_CLIENT,
   TEST_ACCESS_TOKEN,
+  TEST_ACR_CLAIM,
   TEST_AUTH_RESPONSE,
   TEST_BASE_URI,
   TEST_CLIENT_PAIR,
@@ -172,6 +173,48 @@ describe("IdaasClient.login", () => {
 
       expect(responseType).toStrictEqual("code");
       expect(responseMode).toStrictEqual("query");
+    });
+
+    test("auth url contains claims request if acrValues is passed", async () => {
+      const thisTestDifferentAcr = "different";
+      await NO_DEFAULT_IDAAS_CLIENT.login({ acrValues: [TEST_ACR_CLAIM, thisTestDifferentAcr] });
+
+      expect(spyOnGenerateAuthorizationUrl).toBeCalled();
+      const { url: authUrl } = (await spyOnGenerateAuthorizationUrl.mock.results[0].value) as { url: string };
+      const { claims } = getLoginUrlParams(authUrl);
+
+      expect(JSON.parse(claims).id_token.acr.values).toContain(TEST_ACR_CLAIM);
+      expect(JSON.parse(claims).id_token.acr.values).toContain(thisTestDifferentAcr);
+    });
+
+    test("acr is marked as essential in claims request", async () => {
+      await NO_DEFAULT_IDAAS_CLIENT.login({ acrValues: [TEST_ACR_CLAIM] });
+
+      expect(spyOnGenerateAuthorizationUrl).toBeCalled();
+      const { url: authUrl } = (await spyOnGenerateAuthorizationUrl.mock.results[0].value) as { url: string };
+      const { claims } = getLoginUrlParams(authUrl);
+
+      expect(JSON.parse(claims).id_token.acr.essential).toBeTrue();
+    });
+
+    test("auth url does not contain claims request if acrValues is not passed", async () => {
+      await NO_DEFAULT_IDAAS_CLIENT.login();
+
+      expect(spyOnGenerateAuthorizationUrl).toBeCalled();
+      const { url: authUrl } = (await spyOnGenerateAuthorizationUrl.mock.results[0].value) as { url: string };
+      const { claims } = getLoginUrlParams(authUrl);
+
+      expect(claims).toBeNull();
+    });
+
+    test("auth url does not contain claims request if acrValues is passed as empty array", async () => {
+      await NO_DEFAULT_IDAAS_CLIENT.login({ acrValues: [] });
+
+      expect(spyOnGenerateAuthorizationUrl).toBeCalled();
+      const { url: authUrl } = (await spyOnGenerateAuthorizationUrl.mock.results[0].value) as { url: string };
+      const { claims } = getLoginUrlParams(authUrl);
+
+      expect(claims).toBeNull();
     });
 
     test("redirects to the url provided by generateAuthorizationUrl", async () => {

@@ -64,6 +64,7 @@ export const getLoginUrlParams = (href: string) => {
   const responseMode = searchParams.get("response_mode");
   const codeChallenge = searchParams.get("code_challenge");
   const codeChallengeMethod = searchParams.get("code_challenge_method");
+  const claims = searchParams.get("claims");
 
   return {
     responseType,
@@ -76,6 +77,7 @@ export const getLoginUrlParams = (href: string) => {
     responseMode,
     codeChallenge,
     codeChallengeMethod,
+    claims,
   };
 };
 
