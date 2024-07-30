@@ -51,41 +51,15 @@ export const storeData = ({ idToken, accessToken, clientParams, tokenParams }: S
   }
 };
 
-export const getLoginUrlParams = (href: string) => {
+export const getUrlParams = (href: string) => {
   const url = new URL(href);
   const searchParams = url.searchParams;
-  const responseType = searchParams.get("response_type");
-  const clientId = searchParams.get("client_id");
-  const redirectUri = searchParams.get("redirect_uri");
-  const audience = searchParams.get("audience");
-  const scope = searchParams.get("scope");
-  const state = searchParams.get("state");
-  const nonce = searchParams.get("nonce");
-  const responseMode = searchParams.get("response_mode");
-  const codeChallenge = searchParams.get("code_challenge");
-  const codeChallengeMethod = searchParams.get("code_challenge_method");
-  const claims = searchParams.get("claims");
+  // biome-ignore lint: type depends on url, only use in tests
+  const paramData: any = {};
 
-  return {
-    responseType,
-    clientId,
-    redirectUri,
-    audience,
-    scope,
-    state,
-    nonce,
-    responseMode,
-    codeChallenge,
-    codeChallengeMethod,
-    claims,
-  };
-};
+  searchParams.forEach((val, key) => {
+    paramData[key] = val;
+  });
 
-export const getLogoutUrlParams = (href: string) => {
-  const url = new URL(href);
-  const searchParams = url.searchParams;
-  const logoutRedirect = searchParams.get("post_logout_redirect_uri");
-  const clientId = searchParams.get("client_id");
-
-  return { clientId, logoutRedirect };
+  return paramData;
 };

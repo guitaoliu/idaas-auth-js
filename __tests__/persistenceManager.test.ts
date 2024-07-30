@@ -62,8 +62,8 @@ describe("PersistenceManager", () => {
       });
 
       test("removes the correct token if multiple stored", () => {
-        const token1: AccessToken = { ...TEST_ACCESS_TOKEN_OBJECT, expiresAt: 123 };
-        const token2: AccessToken = { ...TEST_ACCESS_TOKEN_OBJECT, expiresAt: 321 };
+        const token1: AccessToken = { ...TEST_ACCESS_TOKEN_OBJECT, accessToken: "123" };
+        const token2: AccessToken = { ...TEST_ACCESS_TOKEN_OBJECT, accessToken: "321" };
         const value = [token1, token2];
         localStorage.setItem(TEST_ACCESS_TOKEN_KEY, JSON.stringify(value));
 

@@ -76,6 +76,11 @@ export interface LoginOptions {
    * Determines the strength/quality of the method used to authenticate the user.
    */
   acrValues?: string[];
+
+  /**
+   * Specifies the maximum age of a token, this value does not change on token refresh.
+   */
+  maxAge?: string;
 }
 
 /**

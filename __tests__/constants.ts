@@ -51,6 +51,7 @@ export const TEST_ACCESS_TOKEN_OBJECT: AccessToken = {
   scope: TEST_SCOPE,
   audience: TEST_AUDIENCE,
   refreshToken: TEST_REFRESH_TOKEN,
+  maxAgeExpiry: Math.floor(Date.now() / 1000) + 240,
 };
 
 export const TEST_CLIENT_PARAMS: ClientParams = {

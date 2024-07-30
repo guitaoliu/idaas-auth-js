@@ -1,6 +1,6 @@
 import { afterAll, afterEach, describe, expect, jest, spyOn, test } from "bun:test";
 import { NO_DEFAULT_IDAAS_CLIENT, TEST_BASE_URI, TEST_CLIENT_ID } from "../constants";
-import { getLogoutUrlParams, mockFetch, storeData } from "../helpers";
+import { getUrlParams, mockFetch, storeData } from "../helpers";
 
 describe("IdaasClient.logout", () => {
   // @ts-ignore not full type
@@ -49,10 +49,10 @@ describe("IdaasClient.logout", () => {
     const redirectUri = generateLogoutCall[1];
     expect(redirectUri).toBeUndefined();
 
-    const { clientId, logoutRedirect } = getLogoutUrlParams(window.location.href);
+    const { client_id, post_logout_redirect_uri } = getUrlParams(window.location.href);
 
-    expect(clientId).toStrictEqual(TEST_CLIENT_ID);
-    expect(logoutRedirect).toBeNull();
+    expect(client_id).toStrictEqual(TEST_CLIENT_ID);
+    expect(post_logout_redirect_uri).toBeUndefined();
   });
 
   test("generates valid logout url with redirectUri", async () => {
@@ -66,9 +66,9 @@ describe("IdaasClient.logout", () => {
     const passedRedirectUri = generateLogoutCall[0];
     expect(passedRedirectUri).toStrictEqual(redirectUri);
 
-    const { clientId, logoutRedirect } = getLogoutUrlParams(window.location.href);
-    expect(clientId).toStrictEqual(TEST_CLIENT_ID);
-    expect(logoutRedirect).toStrictEqual(TEST_BASE_URI);
+    const { client_id, post_logout_redirect_uri } = getUrlParams(window.location.href);
+    expect(client_id).toStrictEqual(TEST_CLIENT_ID);
+    expect(post_logout_redirect_uri).toStrictEqual(TEST_BASE_URI);
   });
 
   test("fetches end session endpoint from config", async () => {

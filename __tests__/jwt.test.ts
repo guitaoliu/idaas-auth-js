@@ -1,4 +1,5 @@
 import { describe, expect, spyOn, test } from "bun:test";
+// biome-ignore lint: needed for spyOn
 import * as jose from "jose";
 import { validateIdToken, validateUserInfoToken } from "../src/utils/jwt";
 import {

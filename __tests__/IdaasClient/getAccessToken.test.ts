@@ -28,6 +28,8 @@ describe("IdaasClient.getAccessToken", () => {
 
   // @ts-ignore private
   const spyOnPersistenceGetAccessTokens = spyOn(NO_DEFAULT_IDAAS_CLIENT.persistenceManager, "getAccessTokens");
+  // @ts-ignore private
+  const spyOnRemoveUnusableTokens = spyOn(NO_DEFAULT_IDAAS_CLIENT, "removeUnusableTokens");
   // @ts-ignore not full type
   const spyOnFetch = spyOn(window, "fetch").mockImplementation(mockFetch);
   const storeToken = (token: AccessToken) => {
@@ -188,16 +190,6 @@ describe("IdaasClient.getAccessToken", () => {
     expect(token).toStrictEqual("fiveScopes");
   });
 
-  test("removes a token with the requested scopes and audience that is expired and non-refreshable", async () => {
-    storeToken({ ...TEST_ACCESS_TOKEN_OBJECT, expiresAt: 0, accessToken: "expiredToken", refreshToken: undefined });
-    storeToken(TEST_ACCESS_TOKEN_OBJECT);
-
-    const token = await NO_DEFAULT_IDAAS_CLIENT.getAccessToken({ audience: TEST_AUDIENCE });
-
-    expect(JSON.parse(localStorage.getItem(TEST_ACCESS_PAIR.key)).length).toBe(1);
-    expect(token).toStrictEqual(TEST_ACCESS_TOKEN);
-  });
-
   test("refreshes a token with the requested scopes and audience that is expired and refreshable", async () => {
     storeToken({ ...TEST_ACCESS_TOKEN_OBJECT, expiresAt: 0, scope: "1" });
     storeToken({ ...TEST_ACCESS_TOKEN_OBJECT, accessToken: "notRefreshed", scope: "1 2" });
@@ -299,5 +291,39 @@ describe("IdaasClient.getAccessToken", () => {
     const token = await SET_DEFAULTS_IDAAS_CLIENT.getAccessToken({ audience: TEST_AUDIENCE });
 
     expect(token).toStrictEqual(TEST_ACCESS_TOKEN);
+  });
+
+  describe("removeUnusableTokens", () => {
+    test("calls removeUnusableTokens", async () => {
+      await NO_DEFAULT_IDAAS_CLIENT.getAccessToken({ fallbackAuthorizationOptions: {} });
+
+      expect(spyOnRemoveUnusableTokens).toBeCalled();
+    });
+
+    test("removes tokens that have reached their max_age", async () => {
+      storeToken({ ...TEST_ACCESS_TOKEN_OBJECT, maxAgeExpiry: 1 });
+      await NO_DEFAULT_IDAAS_CLIENT.getAccessToken({ fallbackAuthorizationOptions: {} });
+
+      // @ts-ignore private
+      expect(NO_DEFAULT_IDAAS_CLIENT.persistenceManager.getAccessTokens()).toStrictEqual([]);
+    });
+
+    test("keeps tokens that have not reached their max_age", async () => {
+      storeToken(TEST_ACCESS_TOKEN_OBJECT);
+      await NO_DEFAULT_IDAAS_CLIENT.getAccessToken({ fallbackAuthorizationOptions: {} });
+
+      // @ts-ignore private
+      expect(NO_DEFAULT_IDAAS_CLIENT.persistenceManager.getAccessTokens()).toStrictEqual([TEST_ACCESS_TOKEN_OBJECT]);
+    });
+
+    test("removes a token with the requested scopes and audience that is expired and non-refreshable", async () => {
+      storeToken({ ...TEST_ACCESS_TOKEN_OBJECT, expiresAt: 0, accessToken: "expiredToken", refreshToken: undefined });
+      storeToken(TEST_ACCESS_TOKEN_OBJECT);
+
+      const token = await NO_DEFAULT_IDAAS_CLIENT.getAccessToken({ audience: TEST_AUDIENCE });
+
+      expect(JSON.parse(localStorage.getItem(TEST_ACCESS_PAIR.key)).length).toBe(1);
+      expect(token).toStrictEqual(TEST_ACCESS_TOKEN);
+    });
   });
 });

@@ -65,6 +65,7 @@ export class IdaasClient {
     useRefreshToken = false,
     popup = false,
     acrValues,
+    maxAge,
   }: LoginOptions = {}) {
     if (popup) {
       const popupWindow = openPopup("");
@@ -74,10 +75,10 @@ export class IdaasClient {
         popupWindow.close();
         throw new Error("Attempting to use popup but web_message is not supported by OpenID provider.");
       }
-      return await this.loginWithPopup({ audience, scope, redirectUri, useRefreshToken, acrValues });
+      return await this.loginWithPopup({ audience, scope, redirectUri, useRefreshToken, acrValues, maxAge });
     }
 
-    await this.loginWithRedirect({ audience, scope, redirectUri, useRefreshToken, acrValues });
+    await this.loginWithRedirect({ audience, scope, redirectUri, useRefreshToken, acrValues, maxAge });
 
     return null;
   }
@@ -91,6 +92,7 @@ export class IdaasClient {
     redirectUri,
     useRefreshToken,
     acrValues,
+    maxAge,
   }: LoginOptions): Promise<string | null> {
     const finalRedirectUri = redirectUri ?? sanitizeUri(window.location.href);
 
@@ -101,6 +103,7 @@ export class IdaasClient {
       scope,
       audience,
       acrValues,
+      maxAge,
     );
 
     const popup = openPopup(url);
@@ -127,9 +130,8 @@ export class IdaasClient {
    * Perform the authorization code flow by redirecting to the OpenID Provider (OP) to authenticate the user and then redirect
    * with the necessary state and code.
    */
-  private async loginWithRedirect({ audience, scope, redirectUri, useRefreshToken, acrValues }: LoginOptions) {
+  private async loginWithRedirect({ audience, scope, redirectUri, useRefreshToken, acrValues, maxAge }: LoginOptions) {
     const finalRedirectUri = redirectUri ?? sanitizeUri(window.location.href);
-
     const { url, nonce, state, codeVerifier } = await this.generateAuthorizationUrl(
       "query",
       finalRedirectUri,
@@ -137,6 +139,7 @@ export class IdaasClient {
       scope,
       audience,
       acrValues,
+      maxAge,
     );
 
     this.persistenceManager.saveClientParams({
@@ -205,6 +208,34 @@ export class IdaasClient {
   }
 
   /**
+   * Removes tokens from storage that have surpassed their max_age, and tokens that are expired and not refreshable.
+   */
+  private removeUnusableTokens = () => {
+    const tokens = this.persistenceManager.getAccessTokens();
+    if (!tokens) {
+      return;
+    }
+    const now = Math.floor(Date.now() / 1000);
+    // buffer (in seconds) to refresh/delete early, ensures an expired token is not returned
+    const buffer = 15;
+    // leeway (in seconds) to give, ensures user can use tokens with a short max_age
+    const leeway = 15;
+
+    for (const token of tokens) {
+      if (token.maxAgeExpiry) {
+        if (now > token.maxAgeExpiry + leeway) {
+          this.persistenceManager.removeAccessToken(token);
+        }
+      }
+
+      if (now > token.expiresAt - buffer) {
+        if (!token.refreshToken) {
+          this.persistenceManager.removeAccessToken(token);
+        }
+      }
+    }
+  };
+  /**
    * Returns an access token with the required scopes and audience that is unexpired or refreshable.
    * The `fallbackAuthorizationOptions` parameter determines the result if there are no access tokens with the required scopes and audience that are unexpired or refreshable.
    */
@@ -213,11 +244,16 @@ export class IdaasClient {
     scope = this.globalScope,
     fallbackAuthorizationOptions,
   }: GetAccessTokenOptions = {}): Promise<string | null> {
+    // 1. Remove tokens that are no longer valid
+    this.removeUnusableTokens();
     const accessTokens = this.persistenceManager.getAccessTokens();
     const requestedScopes = scope.split(" ");
+    const now = Date.now();
+    // buffer (in seconds) to refresh/delete early, ensures an expired token is not returned
+    const buffer = 15;
 
     if (accessTokens) {
-      // 1. Find all tokens with the required audience that possess all required scopes
+      // 2. Find all tokens with the required audience that possess all required scopes
       // Tokens that have the required audience
       const tokensWithAudience = accessTokens.filter((token) => token.audience === audience);
 
@@ -232,28 +268,23 @@ export class IdaasClient {
         (token1, token2) => token1.scope.split(" ").length - token2.scope.split(" ").length,
       );
 
-      // 2. Moving from the tokens found above with the fewest number of scopes to those with the most number of scopes
+      // 3. Taking the token with the fewest number of scopes:
       // - If the token is not expired, return it
-      // - If the token is expired and not refreshable, remove it from storage
       // - If the token is expired but refreshable, refresh it, remove it from storage, store the refreshed token, then return the refreshed token
-      for (const possibleAccessToken of sortedPossibleTokens) {
-        const { refreshToken, accessToken, expiresAt, scope, audience } = possibleAccessToken;
-        // buffer (in seconds) to refresh early, ensuring unexpired token is returned
-        const buffer = 15;
-
-        const now = new Date();
-        const expDate = new Date((expiresAt - buffer) * 1000);
+      if (sortedPossibleTokens[0]) {
+        const requestedToken = sortedPossibleTokens[0];
+        const { refreshToken, accessToken, expiresAt, scope, audience } = requestedToken;
+        const expDate = (expiresAt - buffer) * 1000;
 
         // Token not expired
         if (expDate > now) {
           return accessToken;
         }
 
-        // No refresh token
         if (!refreshToken) {
-          this.persistenceManager.removeAccessToken(possibleAccessToken);
-          continue;
+          throw new Error("Token that is not valid was not removed");
         }
+
         const {
           refresh_token: newRefreshToken,
           access_token: newEncodedAccessToken,
@@ -270,13 +301,13 @@ export class IdaasClient {
           scope,
         };
 
-        this.persistenceManager.removeAccessToken(possibleAccessToken);
+        this.persistenceManager.removeAccessToken(requestedToken);
         this.persistenceManager.saveAccessToken(newAccessToken);
         return newEncodedAccessToken;
       }
     }
 
-    // 3. If no suitable tokens were found or all suitable tokens were expired and not refreshable, attempt to login using the fallbackAuthorizationOptions
+    // 4. If no suitable tokens were found or all suitable tokens were expired and not refreshable, attempt to login using the fallbackAuthorizationOptions
     // No suitable tokens found
     if (fallbackAuthorizationOptions) {
       const { redirectUri, useRefreshToken, popup } = fallbackAuthorizationOptions;
@@ -296,7 +327,9 @@ export class IdaasClient {
     if (!tokenParams) {
       throw new Error("No token params stored, unable to parse");
     }
-    const { audience, scope } = tokenParams;
+    const { audience, scope, maxAge } = tokenParams;
+    const maxAgeExpiry = maxAge ? expiryToEpochSeconds(maxAge) : undefined;
+
     this.persistenceManager.removeTokenParams();
 
     const newAccessToken: AccessToken = {
@@ -305,6 +338,7 @@ export class IdaasClient {
       expiresAt,
       audience,
       scope,
+      maxAgeExpiry,
     };
 
     this.persistenceManager.saveIdToken({ encoded: encodedIdToken, decoded: decodedIdToken });
@@ -508,6 +542,7 @@ export class IdaasClient {
     scope: string = this.globalScope,
     audience: string | undefined = this.globalAudience,
     acrValues: string[] = [],
+    maxAge = "-1",
   ) {
     const { authorization_endpoint } = await this.getConfig();
     const scopeAsArray = scope.split(" ");
@@ -539,6 +574,13 @@ export class IdaasClient {
     // https://datatracker.ietf.org/doc/html/rfc7636#section-7.2
     url.searchParams.append("code_challenge_method", "S256");
 
+    if (Number.parseInt(maxAge) >= 0) {
+      url.searchParams.append("max_age", maxAge);
+      this.persistenceManager.saveTokenParams({ audience, scope: usedScope, maxAge });
+    } else {
+      this.persistenceManager.saveTokenParams({ audience, scope: usedScope });
+    }
+
     if (acrValues.length > 0) {
       const claimRequest = JSON.stringify({
         id_token: {
@@ -550,8 +592,6 @@ export class IdaasClient {
       });
       url.searchParams.append("claims", claimRequest);
     }
-
-    this.persistenceManager.saveTokenParams({ audience, scope: usedScope });
 
     return { url: url.toString(), nonce, state, codeVerifier };
   }

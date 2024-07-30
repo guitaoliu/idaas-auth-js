@@ -22,6 +22,9 @@ export interface ClientParams {
 export interface TokenParams {
   audience?: string;
   scope: string;
+
+  // RFC 9470
+  maxAge?: string;
 }
 
 /**
@@ -41,6 +44,7 @@ export interface AccessToken {
   refreshToken?: string;
   audience?: string;
   scope: string;
+  maxAgeExpiry?: number;
 }
 
 export class PersistenceManager {
@@ -122,10 +126,16 @@ export class PersistenceManager {
    */
   public removeAccessToken(removedToken: AccessToken) {
     const accessTokens = this.getAccessTokens();
-    if (!accessTokens) {
+    if (!accessTokens || accessTokens.length === 0) {
       return;
     }
-    const index = accessTokens.indexOf(removedToken);
+
+    const index = accessTokens.findIndex((token) => token.accessToken === removedToken.accessToken);
+
+    if (index === -1) {
+      throw new Error("error removing access token, token not found");
+    }
+
     accessTokens.splice(index, 1);
     const stringifiedData = JSON.stringify(accessTokens);
     this.save(this.accessTokenStorageKey, stringifiedData);

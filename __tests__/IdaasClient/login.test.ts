@@ -1,6 +1,8 @@
 import { afterAll, afterEach, describe, expect, jest, spyOn, test } from "bun:test";
+// biome-ignore lint: needed for spyOn
 import * as browser from "../../src/utils/browser";
 import { formatUrl } from "../../src/utils/format";
+// biome-ignore lint: needed for spyOn
 import * as jwt from "../../src/utils/jwt";
 import {
   NO_DEFAULT_IDAAS_CLIENT,
@@ -17,7 +19,7 @@ import {
   TEST_SCOPE,
   TEST_TOKEN_PAIR,
 } from "../constants";
-import { getLoginUrlParams, mockFetch } from "../helpers";
+import { getUrlParams, mockFetch } from "../helpers";
 
 describe("IdaasClient.login", () => {
   // @ts-ignore not full type
@@ -116,7 +118,7 @@ describe("IdaasClient.login", () => {
 
         expect(spyOnGenerateAuthorizationUrl).toBeCalled();
         const { url: authUrl } = (await spyOnGenerateAuthorizationUrl.mock.results[0].value) as { url: string };
-        const { scope } = getLoginUrlParams(authUrl);
+        const { scope } = getUrlParams(authUrl);
 
         expect(scope).toBeTruthy();
       });
@@ -126,7 +128,7 @@ describe("IdaasClient.login", () => {
 
         expect(spyOnGenerateAuthorizationUrl).toBeCalled();
         const { url: authUrl } = (await spyOnGenerateAuthorizationUrl.mock.results[0].value) as { url: string };
-        const { scope } = getLoginUrlParams(authUrl);
+        const { scope } = getUrlParams(authUrl);
         const scopeArr = scope.split(" ");
 
         expect(scopeArr).toContain("test_scope1");
@@ -138,7 +140,7 @@ describe("IdaasClient.login", () => {
 
         expect(spyOnGenerateAuthorizationUrl).toBeCalled();
         const { url: authUrl } = (await spyOnGenerateAuthorizationUrl.mock.results[0].value) as { url: string };
-        const { scope } = getLoginUrlParams(authUrl);
+        const { scope } = getUrlParams(authUrl);
         const sortedUrlScope = scope.split(" ").sort().join(", ");
         const sortedTestScope = TEST_SCOPE.split(" ").sort().join(", ");
 
@@ -154,7 +156,7 @@ describe("IdaasClient.login", () => {
 
         expect(spyOnGenerateAuthorizationUrl).toBeCalled();
         const { url: authUrl } = (await spyOnGenerateAuthorizationUrl.mock.results[0].value) as { url: string };
-        const { scope } = getLoginUrlParams(authUrl);
+        const { scope } = getUrlParams(authUrl);
         const requiredScopes = TEST_DIFFERENT_SCOPE.split(" ");
         const receivedScopes = scope.split(" ");
 
@@ -169,10 +171,40 @@ describe("IdaasClient.login", () => {
 
       expect(spyOnGenerateAuthorizationUrl).toBeCalled();
       const { url: authUrl } = (await spyOnGenerateAuthorizationUrl.mock.results[0].value) as { url: string };
-      const { responseMode, responseType } = getLoginUrlParams(authUrl);
+      const { response_mode, response_type } = getUrlParams(authUrl);
 
-      expect(responseType).toStrictEqual("code");
-      expect(responseMode).toStrictEqual("query");
+      expect(response_type).toStrictEqual("code");
+      expect(response_mode).toStrictEqual("query");
+    });
+
+    test("auth url contains max_age param if maxAge >= 0", async () => {
+      await NO_DEFAULT_IDAAS_CLIENT.login({ maxAge: "0" });
+
+      expect(spyOnGenerateAuthorizationUrl).toBeCalled();
+      const { url: authUrl } = (await spyOnGenerateAuthorizationUrl.mock.results[0].value) as { url: string };
+      const { max_age } = getUrlParams(authUrl);
+
+      expect(max_age).toStrictEqual("0");
+    });
+
+    test("auth url does not contain max_age param if maxAge is undefined", async () => {
+      await NO_DEFAULT_IDAAS_CLIENT.login();
+
+      expect(spyOnGenerateAuthorizationUrl).toBeCalled();
+      const { url: authUrl } = (await spyOnGenerateAuthorizationUrl.mock.results[0].value) as { url: string };
+      const { max_age } = getUrlParams(authUrl);
+
+      expect(max_age).toBeUndefined();
+    });
+
+    test("auth url does not contain max_age param if maxAge is negative", async () => {
+      await NO_DEFAULT_IDAAS_CLIENT.login({ maxAge: "-1" });
+
+      expect(spyOnGenerateAuthorizationUrl).toBeCalled();
+      const { url: authUrl } = (await spyOnGenerateAuthorizationUrl.mock.results[0].value) as { url: string };
+      const { max_age } = getUrlParams(authUrl);
+
+      expect(max_age).toBeUndefined();
     });
 
     test("auth url contains claims request if acrValues is passed", async () => {
@@ -181,7 +213,7 @@ describe("IdaasClient.login", () => {
 
       expect(spyOnGenerateAuthorizationUrl).toBeCalled();
       const { url: authUrl } = (await spyOnGenerateAuthorizationUrl.mock.results[0].value) as { url: string };
-      const { claims } = getLoginUrlParams(authUrl);
+      const { claims } = getUrlParams(authUrl);
 
       expect(JSON.parse(claims).id_token.acr.values).toContain(TEST_ACR_CLAIM);
       expect(JSON.parse(claims).id_token.acr.values).toContain(thisTestDifferentAcr);
@@ -192,7 +224,7 @@ describe("IdaasClient.login", () => {
 
       expect(spyOnGenerateAuthorizationUrl).toBeCalled();
       const { url: authUrl } = (await spyOnGenerateAuthorizationUrl.mock.results[0].value) as { url: string };
-      const { claims } = getLoginUrlParams(authUrl);
+      const { claims } = getUrlParams(authUrl);
 
       expect(JSON.parse(claims).id_token.acr.essential).toBeTrue();
     });
@@ -202,9 +234,9 @@ describe("IdaasClient.login", () => {
 
       expect(spyOnGenerateAuthorizationUrl).toBeCalled();
       const { url: authUrl } = (await spyOnGenerateAuthorizationUrl.mock.results[0].value) as { url: string };
-      const { claims } = getLoginUrlParams(authUrl);
+      const { claims } = getUrlParams(authUrl);
 
-      expect(claims).toBeNull();
+      expect(claims).toBeUndefined();
     });
 
     test("auth url does not contain claims request if acrValues is passed as empty array", async () => {
@@ -212,9 +244,9 @@ describe("IdaasClient.login", () => {
 
       expect(spyOnGenerateAuthorizationUrl).toBeCalled();
       const { url: authUrl } = (await spyOnGenerateAuthorizationUrl.mock.results[0].value) as { url: string };
-      const { claims } = getLoginUrlParams(authUrl);
+      const { claims } = getUrlParams(authUrl);
 
-      expect(claims).toBeNull();
+      expect(claims).toBeUndefined();
     });
 
     test("redirects to the url provided by generateAuthorizationUrl", async () => {
