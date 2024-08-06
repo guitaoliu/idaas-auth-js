@@ -27,6 +27,8 @@ export const TEST_DIFFERENT_SCOPE = "different scope";
 export const TEST_DIFFERENT_AUDIENCE = "differentAudience";
 export const TEST_DIFFERENT_ACCESS_TOKEN = "differentAccessToken";
 export const TEST_ACR_CLAIM = "testingacrclaim";
+export const TEST_ENCODED_TOKEN =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0aW5nIiwiaXNzIjoidGVzdGluZ2lzc3VlciIsImFjciI6InVybjpvYXNpczpuYW1lczp0YzpTQU1MOjIuMDphYzpjbGFzc2VzOlRpbWVTeW5jVG9rZW4iLCJuYmYiOjE3MjI5NTE5NCwiYXV0aF90aW1lIjoxNzIyOTUxOTQsImV4cCI6MTcyMjk1MjI0LCJpYXQiOjE3MjI5NTE5NH0.7zCvyEgOe07ehsEytm7YAqUwVsCNbv5VOBd_vfqxaUY";
 
 export const NO_DEFAULT_IDAAS_CLIENT = new IdaasClient({
   issuerUrl: TEST_ISSUER_URI,
@@ -52,6 +54,7 @@ export const TEST_ACCESS_TOKEN_OBJECT: AccessToken = {
   audience: TEST_AUDIENCE,
   refreshToken: TEST_REFRESH_TOKEN,
   maxAgeExpiry: Math.floor(Date.now() / 1000) + 240,
+  acr: TEST_ACR_CLAIM,
 };
 
 export const TEST_CLIENT_PARAMS: ClientParams = {

@@ -207,26 +207,16 @@ describe("IdaasClient.login", () => {
       expect(max_age).toBeUndefined();
     });
 
-    test("auth url contains claims request if acrValues is passed", async () => {
+    test("auth url contains acr_values if acrValues is passed", async () => {
       const thisTestDifferentAcr = "different";
       await NO_DEFAULT_IDAAS_CLIENT.login({ acrValues: [TEST_ACR_CLAIM, thisTestDifferentAcr] });
 
       expect(spyOnGenerateAuthorizationUrl).toBeCalled();
       const { url: authUrl } = (await spyOnGenerateAuthorizationUrl.mock.results[0].value) as { url: string };
-      const { claims } = getUrlParams(authUrl);
+      const { acr_values } = getUrlParams(authUrl);
 
-      expect(JSON.parse(claims).id_token.acr.values).toContain(TEST_ACR_CLAIM);
-      expect(JSON.parse(claims).id_token.acr.values).toContain(thisTestDifferentAcr);
-    });
-
-    test("acr is marked as essential in claims request", async () => {
-      await NO_DEFAULT_IDAAS_CLIENT.login({ acrValues: [TEST_ACR_CLAIM] });
-
-      expect(spyOnGenerateAuthorizationUrl).toBeCalled();
-      const { url: authUrl } = (await spyOnGenerateAuthorizationUrl.mock.results[0].value) as { url: string };
-      const { claims } = getUrlParams(authUrl);
-
-      expect(JSON.parse(claims).id_token.acr.essential).toBeTrue();
+      expect(acr_values.split(" ")).toContain(TEST_ACR_CLAIM);
+      expect(acr_values.split(" ")).toContain(thisTestDifferentAcr);
     });
 
     test("auth url does not contain claims request if acrValues is not passed", async () => {
@@ -234,9 +224,9 @@ describe("IdaasClient.login", () => {
 
       expect(spyOnGenerateAuthorizationUrl).toBeCalled();
       const { url: authUrl } = (await spyOnGenerateAuthorizationUrl.mock.results[0].value) as { url: string };
-      const { claims } = getUrlParams(authUrl);
+      const { acr_values } = getUrlParams(authUrl);
 
-      expect(claims).toBeUndefined();
+      expect(acr_values).toBeUndefined();
     });
 
     test("auth url does not contain claims request if acrValues is passed as empty array", async () => {
@@ -244,9 +234,9 @@ describe("IdaasClient.login", () => {
 
       expect(spyOnGenerateAuthorizationUrl).toBeCalled();
       const { url: authUrl } = (await spyOnGenerateAuthorizationUrl.mock.results[0].value) as { url: string };
-      const { claims } = getUrlParams(authUrl);
+      const { acr_values } = getUrlParams(authUrl);
 
-      expect(claims).toBeUndefined();
+      expect(acr_values).toBeUndefined();
     });
 
     test("redirects to the url provided by generateAuthorizationUrl", async () => {

@@ -115,6 +115,21 @@ document
   });
 ```
 
+You can specify the context class(es) of authentication that are acceptable to be used to authenticate the user. Successful authentication via methods that do not fall under the specified authentication context class(es) will be treated as a failed authentication attempt.
+
+**Note: To use this value later, the received access token must not be opaque.**
+
+```typescript
+document
+  .getElementById("login-with-popup")
+  .addEventListener("click", async () => {
+    // authenticate using an authentication method that falls under the `knowledge` authentication context class
+    await idaasClient.login({ popup: true, acrValues: ["knowledge"] });
+    const idToken = idaasClient.getIdTokenClaims();
+    console.log(idToken);
+  });
+```
+
 ## Access Tokens
 
 ### Accessing a Resource
@@ -161,6 +176,39 @@ document
     const token = idaasClient.getAccessToken({
       audience: "<AUDIENCE>",
       scope: "<SCOPE>",
+      fallbackAuthorizationOptions: {
+        popup: true,
+      },
+    });
+
+    const response = await fetch(`https://resource.com`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const data = await response.json();
+    console.log(data);
+  });
+```
+
+### Verify Context Class of Authentication
+
+You are able to specify the context class(es) of authentication that must be/have been used when authenticating the user to receive the token.
+```html
+<button id="password_login">Authenticate Using Knowledge Authentication</button>
+```
+
+```typescript
+document
+  .getElementById("access-resource")
+  .addEventListener("click", async () => {
+    const token = idaasClient.getAccessToken({
+      // Retrieve a token with <SCOPE> and <AUDIENCE> that was authenticated via a `knowledge` method of authentication
+      audience: "<AUDIENCE>",
+      scope: "<SCOPE>",
+      acrValues: ["knowledge"],
+      // If the token is not found, login via an authentication method that falls under the `knowledge` context class to receive this token
       fallbackAuthorizationOptions: {
         popup: true,
       },
@@ -226,45 +274,5 @@ document.getElementById("get-id-token").addEventListener("click", () => {
   // assumes the user is authenticated
   const idToken = idaasClient.getIdTokenClaims();
   console.log("ID Token", idToken);
-});
-```
-
-### Verify the Method of Authentication
-
-An ID token's acr claim communicates the method of authentication that the user used to authenticate. This can be used to lock access behind different authentication methods.
-
-```html
-<button id="verify-auth-method">Click to Verify the Authentication Method</button>
-```
-
-```typescript
-document.getElementById("verify-auth-method").addEventListener("click", () => {
-  const desiredMethods = ["level_1", "level_2"];
-
-  if (idaasClient.isAcrDesired({ desiredAcr: desiredMethods })) {
-    console.log("The current ID token's acr claim is desired");
-  } else {
-    console.log("The current ID token's acr claim is not desired");
-  }
-});
-```
-
-If the current ID token does not have a desired acr claim, you can specify additional parameters to attempt a login to retrieve a new ID token with a desired acr claim.
-
-```typescript
-document.getElementById("determine-auth-method").addEventListener("click", () => {
-  const desiredMethods = ["level_1", "level_2"];
-
-  if (
-    idaasClient.isAcrDesired({
-      desiredAcr: desiredMethods,
-      // login with popup if the current ID token does not have a desired acr claim
-      fallbackAuthorization: { popup: true },
-    })
-  ) {
-    console.log("The ID token's acr claim is desired");
-  } else {
-    console.log("The ID token's acr claim is not desired");
-  }
 });
 ```

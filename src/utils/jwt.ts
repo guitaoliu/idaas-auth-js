@@ -17,6 +17,18 @@ export interface ValidateUserInfoTokenParams {
   jwksEndpoint: string;
 }
 
+export interface DecodedAccessToken {
+  sub: string;
+  acr: string;
+  auth_time?: string;
+  nbf: string;
+  exp: string;
+  iat: string;
+  iss: string;
+  aud?: string;
+  jti: string;
+}
+
 /**
  * Validate the signed ID token received from the /token endpoint in accordance with the OIDC specification.
  *
@@ -192,4 +204,14 @@ export const validateUserInfoToken = async ({
   });
 
   return verifiedJwt.payload as UserClaims;
+};
+
+export const readAccessToken = (encodedToken: string): DecodedAccessToken | null => {
+  let decodedToken: DecodedAccessToken;
+  try {
+    decodedToken = decodeJwt(encodedToken);
+  } catch {
+    return null;
+  }
+  return decodedToken;
 };

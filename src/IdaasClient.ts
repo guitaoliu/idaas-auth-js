@@ -11,7 +11,6 @@ import {
 } from "./api";
 import type {
   AuthorizeResponse,
-  FallbackAuthorizationOptions,
   GetAccessTokenOptions,
   IdaasClientOptions,
   LoginOptions,
@@ -21,7 +20,7 @@ import type {
 import { listenToPopup, openPopup } from "./utils/browser";
 import { base64UrlStringEncode, createRandomString, generateChallengeVerifierPair } from "./utils/crypto";
 import { expiryToEpochSeconds, formatUrl, sanitizeUri } from "./utils/format";
-import { validateIdToken, validateUserInfoToken } from "./utils/jwt";
+import { readAccessToken, validateIdToken, validateUserInfoToken } from "./utils/jwt";
 
 /**
  * A validated token response, contains the TokenResponse as well as the decoded and encoded id token.
@@ -242,11 +241,12 @@ export class IdaasClient {
   public async getAccessToken({
     audience = this.globalAudience,
     scope = this.globalScope,
+    acrValues = [],
     fallbackAuthorizationOptions,
   }: GetAccessTokenOptions = {}): Promise<string | null> {
     // 1. Remove tokens that are no longer valid
     this.removeUnusableTokens();
-    const accessTokens = this.persistenceManager.getAccessTokens();
+    let accessTokens = this.persistenceManager.getAccessTokens();
     const requestedScopes = scope.split(" ");
     const now = Date.now();
     // buffer (in seconds) to refresh/delete early, ensures an expired token is not returned
@@ -255,25 +255,34 @@ export class IdaasClient {
     if (accessTokens) {
       // 2. Find all tokens with the required audience that possess all required scopes
       // Tokens that have the required audience
-      const tokensWithAudience = accessTokens.filter((token) => token.audience === audience);
+      accessTokens = accessTokens.filter((token) => token.audience === audience);
 
       // Tokens that have the required audience and all scopes
-      const possibleTokens = tokensWithAudience.filter((token) => {
+      accessTokens = accessTokens.filter((token) => {
         const tokenScopes = token.scope.split(" ");
         return requestedScopes.every((scope) => tokenScopes.includes(scope));
       });
 
+      if (acrValues && acrValues.length > 0) {
+        // Tokens that have the required audience, all scopes, and a requested acr
+        accessTokens = accessTokens.filter((token) => {
+          if (token.acr) {
+            return acrValues.includes(token.acr);
+          }
+
+          return false;
+        });
+      }
+
       // Sorts tokens by number of scopes in ascending order
-      const sortedPossibleTokens = possibleTokens.sort(
-        (token1, token2) => token1.scope.split(" ").length - token2.scope.split(" ").length,
-      );
+      accessTokens.sort((token1, token2) => token1.scope.split(" ").length - token2.scope.split(" ").length);
 
       // 3. Taking the token with the fewest number of scopes:
       // - If the token is not expired, return it
       // - If the token is expired but refreshable, refresh it, remove it from storage, store the refreshed token, then return the refreshed token
-      if (sortedPossibleTokens[0]) {
-        const requestedToken = sortedPossibleTokens[0];
-        const { refreshToken, accessToken, expiresAt, scope, audience } = requestedToken;
+      if (accessTokens[0]) {
+        const requestedToken = accessTokens[0];
+        const { refreshToken, accessToken, expiresAt, scope, audience, acr } = requestedToken;
         const expDate = (expiresAt - buffer) * 1000;
 
         // Token not expired
@@ -299,6 +308,7 @@ export class IdaasClient {
           expiresAt: newExpiration,
           audience,
           scope,
+          acr,
         };
 
         this.persistenceManager.removeAccessToken(requestedToken);
@@ -312,7 +322,7 @@ export class IdaasClient {
     if (fallbackAuthorizationOptions) {
       const { redirectUri, useRefreshToken, popup } = fallbackAuthorizationOptions;
 
-      return await this.login({ scope, audience, popup, useRefreshToken, redirectUri });
+      return await this.login({ scope, audience, popup, useRefreshToken, redirectUri, acrValues });
     }
 
     throw new Error("Requested token not found, no fallback login specified");
@@ -332,6 +342,9 @@ export class IdaasClient {
 
     this.persistenceManager.removeTokenParams();
 
+    const token = readAccessToken(access_token);
+    const acr = token?.acr ?? undefined;
+
     const newAccessToken: AccessToken = {
       refreshToken: refresh_token,
       accessToken: access_token,
@@ -339,59 +352,11 @@ export class IdaasClient {
       audience,
       scope,
       maxAgeExpiry,
+      acr,
     };
 
     this.persistenceManager.saveIdToken({ encoded: encodedIdToken, decoded: decodedIdToken });
     this.persistenceManager.saveAccessToken(newAccessToken);
-  }
-
-  /**
-   * Returns true if `desired` is defined and included in `arr`.
-   *
-   * @param arr the array of options
-   * @param desired the element to search for
-   */
-  private isIncluded = (arr: string[], desired: string | undefined): boolean => {
-    if (!desired) {
-      return false;
-    }
-
-    return arr.includes(desired);
-  };
-
-  private getIdTokenAcr = (): string | undefined => {
-    const idToken = this.persistenceManager.getIdToken();
-    return idToken?.decoded.acr as string | undefined;
-  };
-
-  /**
-   * Determines if the current ID token's acr claim is an element in `desiredAcr`.
-   * If `fallbackAuthorization` is defined and the current ID token's acr claim is not desired, a login will be attempted to fetch an ID token with an acr claim that is an element in `desiredAcr`.
-   *
-   * @param desiredAcr an array of acr values that are acceptable for the ID token to have
-   * @param fallbackAuthorization the fallback login options to retrieve an ID token with desiredAcr
-   */
-  public async isAcrDesired({
-    desiredAcr,
-    fallbackAuthorization,
-  }: { desiredAcr: string[]; fallbackAuthorization?: FallbackAuthorizationOptions }): Promise<boolean> {
-    const currentAcr = this.getIdTokenAcr();
-
-    // no fallback specified, so return the result regardless
-    if (!fallbackAuthorization) {
-      return this.isIncluded(desiredAcr, currentAcr);
-    }
-
-    // fallback specified, return only if currentAcr is desired
-    if (this.isIncluded(desiredAcr, currentAcr)) {
-      return true;
-    }
-
-    // not authenticated and/or ID token does not have desired acr claim, login with the desired acr claim
-    await this.login({ ...fallbackAuthorization, acrValues: desiredAcr });
-
-    // check if new ID token has desired acr claim
-    return this.isIncluded(desiredAcr, this.getIdTokenAcr());
   }
 
   /**
@@ -582,15 +547,8 @@ export class IdaasClient {
     }
 
     if (acrValues.length > 0) {
-      const claimRequest = JSON.stringify({
-        id_token: {
-          acr: {
-            essential: true,
-            values: acrValues,
-          },
-        },
-      });
-      url.searchParams.append("claims", claimRequest);
+      const acrString = acrValues.join(" ");
+      url.searchParams.append("acr_values", acrString);
     }
 
     return { url: url.toString(), nonce, state, codeVerifier };

@@ -137,6 +137,11 @@ export interface GetAccessTokenOptions {
   scope?: string;
 
   /**
+   * The acr value(s) that are acceptable for this token to have, the returned token's acr claim will be one of these values.
+   */
+  acrValues?: string[];
+
+  /**
    * The values that will be used to attempt a login if the requested token is not found.
    */
   fallbackAuthorizationOptions?: FallbackAuthorizationOptions;

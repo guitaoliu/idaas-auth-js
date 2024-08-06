@@ -25,6 +25,7 @@ export interface TokenParams {
 
   // RFC 9470
   maxAge?: string;
+  acrValue?: string;
 }
 
 /**
@@ -45,6 +46,7 @@ export interface AccessToken {
   audience?: string;
   scope: string;
   maxAgeExpiry?: number;
+  acr?: string;
 }
 
 export class PersistenceManager {

@@ -1,9 +1,10 @@
 import { describe, expect, spyOn, test } from "bun:test";
 // biome-ignore lint: needed for spyOn
 import * as jose from "jose";
-import { validateIdToken, validateUserInfoToken } from "../src/utils/jwt";
+import { readAccessToken, validateIdToken, validateUserInfoToken } from "../src/utils/jwt";
 import {
   TEST_CLIENT_ID,
+  TEST_ENCODED_TOKEN,
   TEST_JWT_PAYLOAD,
   TEST_VALIDATE_ID_TOKEN_PARAMS,
   TEST_VALIDATE_USER_INFO_PARAMS,
@@ -147,9 +148,6 @@ describe("jwt.ts", () => {
   });
 
   describe("validateUserInfoToken", () => {
-    const userInfoToken =
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0aW5nc3ViY2xhaW0iLCJpc3MiOiJ0ZXN0aW5naXNzdWVyIiwiaWF0IjoxNTE2MjM5MDIyfQ.JtqjaTSu3DCFzlD7ppk_rUTI2dmgQX3Z55zdzCIXjUc";
-
     test("returns null if userInfoToken is not a JWT", async () => {
       const result = await validateUserInfoToken({ ...TEST_VALIDATE_USER_INFO_PARAMS, userInfoToken: "not a JWT" });
       expect(result).toBeNull();
@@ -161,8 +159,23 @@ describe("jwt.ts", () => {
         async (userInfoToken) => ({ payload: jose.decodeJwt(userInfoToken) }),
       );
 
-      const result = await validateUserInfoToken({ ...TEST_VALIDATE_USER_INFO_PARAMS, userInfoToken });
+      const result = await validateUserInfoToken({
+        ...TEST_VALIDATE_USER_INFO_PARAMS,
+        userInfoToken: TEST_ENCODED_TOKEN,
+      });
       expect(result).toBeTruthy();
+    });
+  });
+
+  describe("readAccessToken", () => {
+    test("returns an object containing the acr claim", () => {
+      const result = readAccessToken(TEST_ENCODED_TOKEN);
+      expect(result.acr).toBeTruthy();
+    });
+
+    test("returns null if the passed token is not a JWT", () => {
+      const result = readAccessToken("not a JWT");
+      expect(result).toBeNull();
     });
   });
 });

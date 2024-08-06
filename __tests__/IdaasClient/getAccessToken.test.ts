@@ -8,6 +8,7 @@ import {
   TEST_ACCESS_PAIR,
   TEST_ACCESS_TOKEN,
   TEST_ACCESS_TOKEN_OBJECT,
+  TEST_ACR_CLAIM,
   TEST_AUDIENCE,
   TEST_DIFFERENT_ACCESS_TOKEN,
   TEST_DIFFERENT_AUDIENCE,
@@ -68,6 +69,16 @@ describe("IdaasClient.getAccessToken", () => {
 
         const loginRequest = spyOnLogin.mock.calls[0][0] as LoginOptions;
         expect(loginRequest.audience).toStrictEqual(TEST_AUDIENCE);
+      });
+
+      test("acr values specified in getAccessToken param is passed to login", async () => {
+        await NO_DEFAULT_IDAAS_CLIENT.getAccessToken({
+          acrValues: [TEST_ACR_CLAIM],
+          fallbackAuthorizationOptions: {},
+        });
+
+        const loginRequest = spyOnLogin.mock.calls[0][0] as LoginOptions;
+        expect(loginRequest.acrValues).toStrictEqual([TEST_ACR_CLAIM]);
       });
     });
 
@@ -188,6 +199,26 @@ describe("IdaasClient.getAccessToken", () => {
     const token = await NO_DEFAULT_IDAAS_CLIENT.getAccessToken({ scope: "1 2 3 4", audience: TEST_AUDIENCE });
 
     expect(token).toStrictEqual("fiveScopes");
+  });
+
+  test("returns the token with a requested acr value", async () => {
+    storeToken({ ...TEST_ACCESS_TOKEN_OBJECT, acr: "correct", accessToken: "correctAcr" });
+    storeToken({ ...TEST_ACCESS_TOKEN_OBJECT, acr: "wrong", accessToken: "wrongAcr" });
+    storeToken(TEST_ACCESS_TOKEN_OBJECT);
+
+    const token = await NO_DEFAULT_IDAAS_CLIENT.getAccessToken({ acrValues: ["correct"], audience: TEST_AUDIENCE });
+
+    expect(token).toStrictEqual("correctAcr");
+  });
+
+  test("removes a token with the requested scopes and audience that is expired and non-refreshable", async () => {
+    storeToken({ ...TEST_ACCESS_TOKEN_OBJECT, expiresAt: 0, accessToken: "expiredToken", refreshToken: undefined });
+    storeToken(TEST_ACCESS_TOKEN_OBJECT);
+
+    const token = await NO_DEFAULT_IDAAS_CLIENT.getAccessToken({ audience: TEST_AUDIENCE });
+
+    expect(JSON.parse(localStorage.getItem(TEST_ACCESS_PAIR.key)).length).toBe(1);
+    expect(token).toStrictEqual(TEST_ACCESS_TOKEN);
   });
 
   test("refreshes a token with the requested scopes and audience that is expired and refreshable", async () => {
