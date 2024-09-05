@@ -1,4 +1,4 @@
-import type { AuthorizeResponse } from "../models";
+import type { AuthorizeResponse, OnboardingResponse } from "../models";
 
 const DEFAULT_POPUP_TIMEOUT_SECONDS = 300;
 
@@ -21,14 +21,17 @@ export const openPopup = (popupUrl: string) => {
   return popup;
 };
 
-export const listenToPopup = (popup: Window, url: string) => {
+export const listenToAuthorizePopup = (popup: Window, url: string) => {
   const expectedOrigin = new URL(url).origin;
 
   return new Promise<AuthorizeResponse>((resolve, reject) => {
     const popupListenerAbortController = new AbortController();
 
     const popupWebMessageEventHandler = (event: MessageEvent) => {
-      if (event.origin !== expectedOrigin || !event.data || event.data.type !== "authorization_response") {
+      const hasOriginAndData = event.origin === expectedOrigin && event.data;
+      const isAuthorizeEvent = hasOriginAndData && event.data.type === "authorization_response";
+
+      if (!isAuthorizeEvent) {
         return;
       }
 
@@ -37,9 +40,9 @@ export const listenToPopup = (popup: Window, url: string) => {
       const response = event.data.response;
       if (response.error) {
         reject(new Error(response.error));
-      } else {
-        resolve(response as AuthorizeResponse);
       }
+
+      resolve(response as AuthorizeResponse);
     };
 
     // Poll the popup window every second to see if it's closed. We cannot reliably use eventListeners here to support mobile.
@@ -54,6 +57,57 @@ export const listenToPopup = (popup: Window, url: string) => {
     const popupTimeout = setTimeout(() => {
       cleanUpPopup();
       reject(new Error("User took too long to authenticate"));
+    }, DEFAULT_POPUP_TIMEOUT_SECONDS * 1000);
+
+    const cleanUpPopup = () => {
+      clearInterval(pollPopupInterval);
+      clearTimeout(popupTimeout);
+      popup.close();
+      popupListenerAbortController.abort();
+    };
+
+    window.addEventListener("message", popupWebMessageEventHandler, {
+      signal: popupListenerAbortController.signal,
+    });
+  });
+};
+
+export const listenToOnboardingPopup = (popup: Window, url: string) => {
+  const expectedOrigin = new URL(url).origin;
+
+  return new Promise<OnboardingResponse>((resolve, reject) => {
+    const popupListenerAbortController = new AbortController();
+
+    const popupWebMessageEventHandler = (event: MessageEvent) => {
+      const hasOriginAndData = event.origin === expectedOrigin && event.data;
+      const isOnboardingEvent = hasOriginAndData && event.data.type === "onboarding_response";
+
+      if (!isOnboardingEvent) {
+        return;
+      }
+
+      cleanUpPopup();
+
+      const response = event.data.response;
+      if (response.error) {
+        reject(new Error(response.error));
+      }
+
+      resolve(response as OnboardingResponse);
+    };
+
+    // Poll the popup window every second to see if it's closed. We cannot reliably use eventListeners here to support mobile.
+    const pollPopupInterval = setInterval(() => {
+      if (popup.closed) {
+        cleanUpPopup();
+        reject(new Error("Sign up was cancelled by the user"));
+      }
+    }, 1000);
+
+    // Ensure the popup is closed after a certain timeout period
+    const popupTimeout = setTimeout(() => {
+      cleanUpPopup();
+      reject(new Error("User took too long to sign up"));
     }, DEFAULT_POPUP_TIMEOUT_SECONDS * 1000);
 
     const cleanUpPopup = () => {

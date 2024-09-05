@@ -1,18 +1,20 @@
-import { afterAll, afterEach, describe, expect, jest, spyOn, test } from "bun:test";
+import { afterAll, afterEach, beforeEach, describe, expect, jest, spyOn, test } from "bun:test";
 import type { ValidatedTokenResponse } from "../../src/IdaasClient";
-import type { AuthorizeResponse } from "../../src/models";
 // biome-ignore lint: needed for spyOn
 import * as jwt from "../../src/utils/jwt";
 import {
   NO_DEFAULT_IDAAS_CLIENT,
   TEST_ACCESS_TOKEN_KEY,
+  TEST_AUTH_RESPONSE,
   TEST_BASE_URI,
   TEST_CLIENT_ID,
   TEST_CODE,
   TEST_ID_TOKEN_KEY,
   TEST_ID_TOKEN_OBJECT,
+  TEST_ONBOARDING_RESPONSE,
   TEST_STATE,
   TEST_TOKEN_PARAMS,
+  TEST_USER_ID,
 } from "../constants";
 import { mockFetch, storeData } from "../helpers";
 
@@ -20,7 +22,13 @@ describe("IdaasClient.handleRedirect", () => {
   // @ts-ignore not full type
   const spyOnFetch = spyOn(window, "fetch").mockImplementation(mockFetch);
   // @ts-ignore private method
-  const spyOnParseRedirectSearchParams = spyOn(NO_DEFAULT_IDAAS_CLIENT, "parseRedirectSearchParams");
+  const spyOnParseRedirect = spyOn(NO_DEFAULT_IDAAS_CLIENT, "parseRedirect");
+  // @ts-ignore private method
+  const spyOnParseLoginRedirect = spyOn(NO_DEFAULT_IDAAS_CLIENT, "parseLoginRedirect");
+  // @ts-ignore private method
+  const spyOnParseSignUpRedirect = spyOn(NO_DEFAULT_IDAAS_CLIENT, "parseSignUpRedirect");
+  // @ts-ignore private method
+  const spyOnRequestAndValidateTokens = spyOn(NO_DEFAULT_IDAAS_CLIENT, "requestAndValidateTokens");
   // @ts-ignore private method
   const spyOnValidateAuthorizeResponse = spyOn(NO_DEFAULT_IDAAS_CLIENT, "validateAuthorizeResponse");
   // @ts-ignore private method
@@ -28,7 +36,8 @@ describe("IdaasClient.handleRedirect", () => {
   const spyOnValidateIdToken = spyOn(jwt, "validateIdToken").mockImplementation(() => {
     return { decodedJwt: TEST_ID_TOKEN_OBJECT.decoded, idToken: TEST_ID_TOKEN_OBJECT.encoded };
   });
-  const successUrl = `${TEST_BASE_URI}?code=${TEST_CODE}&state=${TEST_STATE}`;
+  const loginSuccessUrl = `${TEST_BASE_URI}?code=${TEST_CODE}&state=${TEST_STATE}`;
+  const onboardingSuccessUrl = `${TEST_BASE_URI}?userId=${TEST_USER_ID}`;
   const startLocation = window.location.href;
 
   afterAll(() => {
@@ -41,168 +50,266 @@ describe("IdaasClient.handleRedirect", () => {
     jest.clearAllMocks();
   });
 
-  test("returns early if no search params in uri", async () => {
+  test("calls `parseRedirect`", async () => {
     await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
-
-    expect(spyOnParseRedirectSearchParams).toBeCalled();
-    expect(spyOnParseRedirectSearchParams.mock.results[0].value).toBeNull();
-    expect(spyOnValidateAuthorizeResponse).not.toBeCalled();
-    expect(spyOnParseAndSaveTokenResponse).not.toBeCalled();
+    expect(spyOnParseRedirect).toBeCalled();
   });
 
-  test("return early if no state in uri", async () => {
-    window.location.href = `${TEST_BASE_URI}?code=code`;
-    await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
-
-    expect(spyOnParseRedirectSearchParams).toBeCalled();
-    expect(spyOnParseRedirectSearchParams.mock.results[0].value).toBeNull();
-    expect(spyOnValidateAuthorizeResponse).not.toBeCalled();
-    expect(spyOnParseAndSaveTokenResponse).not.toBeCalled();
-  });
-
-  test("returns early if no error and code not in uri", async () => {
-    window.location.href = `${TEST_BASE_URI}?state=state`;
-    await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
-
-    expect(spyOnParseRedirectSearchParams).toBeCalled();
-    expect(spyOnParseRedirectSearchParams.mock.results[0].value).toBeNull();
-    expect(spyOnValidateAuthorizeResponse).not.toBeCalled();
-    expect(spyOnParseAndSaveTokenResponse).not.toBeCalled();
-  });
-
-  test("throws error if client params not stored", () => {
-    window.location.href = successUrl;
-
-    expect(async () => {
+  describe("parseRedirect", () => {
+    beforeEach(() => {
+      window.location.href = loginSuccessUrl;
+      storeData({ clientParams: true, tokenParams: true });
+    });
+    test("calls `parseLoginRedirect`", async () => {
       await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
-    }).toThrowError();
-  });
+      expect(spyOnParseLoginRedirect).toBeCalled();
+    });
 
-  test("throws error if error found in search params", () => {
-    storeData({ clientParams: true });
-    window.location.href = `${TEST_BASE_URI}?state=state&error=error`;
-
-    expect(async () => {
+    test("calls `parseSignUpRedirect`", async () => {
       await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
-    }).toThrowError();
+      expect(spyOnParseSignUpRedirect).toBeCalled();
+    });
 
-    const validationResultType = spyOnValidateAuthorizeResponse.mock.results[0].type;
-    const response = spyOnParseRedirectSearchParams.mock.results[0].value as AuthorizeResponse | null;
-
-    expect(validationResultType).toStrictEqual("throw");
-    expect(response?.error).toStrictEqual("error");
-  });
-
-  test("throws error if expected state and current state differ", () => {
-    storeData({ clientParams: true });
-    window.location.href = `${TEST_BASE_URI}?code=${TEST_CODE}&state=different_state`;
-
-    expect(async () => {
+    test("returns the result of both parses", async () => {
       await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
-    }).toThrowError();
+      const signUpResponse = spyOnParseSignUpRedirect.mock.results[0].value;
+      const authorizeResponse = spyOnParseLoginRedirect.mock.results[0].value;
 
-    const validationResultType = spyOnValidateAuthorizeResponse.mock.results[0].type;
-    expect(validationResultType).toStrictEqual("throw");
+      expect(spyOnParseRedirect.mock.results[0].value).toStrictEqual({ signUpResponse, authorizeResponse });
+    });
+
+    test("returns early if there are no search params in url", async () => {
+      window.location.href = TEST_BASE_URI;
+
+      await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
+      expect(spyOnParseLoginRedirect).not.toBeCalled();
+      expect(spyOnParseSignUpRedirect).not.toBeCalled();
+
+      expect(spyOnParseRedirect.mock.results[0].value).toStrictEqual({ signUpResponse: null, authorizeResponse: null });
+    });
   });
 
-  test("makes a fetch request to the token endpoint", async () => {
-    storeData({ clientParams: true, tokenParams: true });
-    window.location.href = successUrl;
+  describe("parseLoginRedirect", () => {
+    test("returns null if state not present in url", async () => {
+      window.location.href = `${TEST_BASE_URI}?code=code`;
+      await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
 
-    await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
+      expect(spyOnParseLoginRedirect.mock.results[0].value).toBeNull();
+    });
 
-    const fetchRequests = spyOnFetch.mock.calls;
-    const requestToTokenEndpoint = fetchRequests.find((request) => request.includes(`${TEST_BASE_URI}/token`));
+    test("returns null if both code and error are not in url", async () => {
+      window.location.href = `${TEST_BASE_URI}?state=state`;
+      await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
 
-    expect(requestToTokenEndpoint).toBeTruthy();
+      expect(spyOnParseLoginRedirect.mock.results[0].value).toBeNull();
+    });
+
+    test("returns the search params found in url", async () => {
+      window.location.href = loginSuccessUrl;
+      storeData({ clientParams: true, tokenParams: true });
+      await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
+
+      expect(spyOnParseLoginRedirect.mock.results[0].value).toStrictEqual(TEST_AUTH_RESPONSE);
+    });
   });
 
-  test("validateIdToken is called", async () => {
-    storeData({ clientParams: true, tokenParams: true });
-    window.location.href = successUrl;
-
-    await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
-
-    expect(spyOnValidateIdToken).toBeCalled();
-  });
-
-  test("parseAndValidateTokens is called", async () => {
-    storeData({ clientParams: true, tokenParams: true });
-    window.location.href = successUrl;
-
-    await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
-
-    expect(spyOnParseAndSaveTokenResponse).toBeCalled();
-  });
-
-  describe("parseAndValidateTokens", () => {
-    test("throws error if no token params stored", () => {
-      storeData({ clientParams: true });
-      window.location.href = successUrl;
-
+  describe("parseSignUpRedirect", () => {
+    test("throws error if error in search params", () => {
+      window.location.href = `${TEST_BASE_URI}?error=error`;
       expect(async () => {
         await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
       }).toThrowError();
-
-      expect(spyOnParseAndSaveTokenResponse.mock.results[0].type).toStrictEqual("throw");
     });
 
-    test("removes tokenParams from storage", async () => {
+    test("returns the search params found in url", async () => {
+      window.location.href = onboardingSuccessUrl;
       storeData({ clientParams: true, tokenParams: true });
-      window.location.href = successUrl;
+      await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
+
+      expect(spyOnParseSignUpRedirect.mock.results[0].value).toStrictEqual(TEST_ONBOARDING_RESPONSE);
+    });
+  });
+
+  test("returns early if both authorizeResponse and onboardingResponse are falsy (null)", async () => {
+    window.location.href = TEST_BASE_URI;
+    storeData({ tokenParams: true, clientParams: true });
+    const result = await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
+
+    expect(spyOnParseAndSaveTokenResponse).not.toBeCalled();
+    expect(result).toBeUndefined();
+  });
+
+  describe("authorization event", () => {
+    beforeEach(() => {
+      window.location.href = loginSuccessUrl;
+    });
+
+    test("throws error if client params are not stored", () => {
+      expect(async () => {
+        await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
+      }).toThrowError("client");
+    });
+
+    test("calls validateAuthorizeResponse", async () => {
+      storeData({ clientParams: true, tokenParams: true });
+      await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
+
+      expect(spyOnValidateAuthorizeResponse).toBeCalled();
+    });
+
+    describe("validateAuthorizeResponse", () => {
+      test("throws error if error present in search params", () => {
+        expect(() => {
+          // @ts-ignore private method
+          NO_DEFAULT_IDAAS_CLIENT.validateAuthorizeResponse({ ...TEST_AUTH_RESPONSE, error: "error" }, "testingstate");
+        }).toThrowError();
+      });
+
+      test("throws error if state not present in search params", () => {
+        expect(() => {
+          // @ts-ignore private method
+          NO_DEFAULT_IDAAS_CLIENT.validateAuthorizeResponse({ ...TEST_AUTH_RESPONSE, state: null }, "testingstate");
+        }).toThrowError();
+      });
+
+      test("throws error if code not present in search params", () => {
+        expect(() => {
+          // @ts-ignore private method
+          NO_DEFAULT_IDAAS_CLIENT.validateAuthorizeResponse({ ...TEST_AUTH_RESPONSE, code: null }, "testingstate");
+        }).toThrowError();
+      });
+
+      test("throws error if expected state and current state differ", () => {
+        storeData({ clientParams: true });
+        window.location.href = `${TEST_BASE_URI}?code=${TEST_CODE}&state=different_state`;
+
+        expect(async () => {
+          await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
+        }).toThrowError();
+
+        const validationResultType = spyOnValidateAuthorizeResponse.mock.results[0].type;
+        expect(validationResultType).toStrictEqual("throw");
+      });
+    });
+
+    test("calls requestAndValidateTokens", async () => {
+      storeData({ clientParams: true, tokenParams: true });
+      window.location.href = loginSuccessUrl;
 
       await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
 
-      expect(localStorage.getItem(`entrust.tokenParams.${TEST_CLIENT_ID}`)).toBeNull();
+      expect(spyOnRequestAndValidateTokens).toBeCalled();
     });
 
-    test("stores the given ID token", async () => {
+    describe("requestAndValidateTokens", () => {
+      test("makes a fetch request to the token endpoint", async () => {
+        storeData({ clientParams: true, tokenParams: true });
+        window.location.href = loginSuccessUrl;
+
+        await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
+
+        const fetchRequests = spyOnFetch.mock.calls;
+        const requestToTokenEndpoint = fetchRequests.find((request) => request.includes(`${TEST_BASE_URI}/token`));
+
+        expect(requestToTokenEndpoint).toBeTruthy();
+      });
+
+      test("calls validateIdToken", async () => {
+        storeData({ clientParams: true, tokenParams: true });
+        window.location.href = loginSuccessUrl;
+
+        await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
+
+        expect(spyOnValidateIdToken).toBeCalled();
+      });
+    });
+
+    test("parseAndValidateTokens is called", async () => {
       storeData({ clientParams: true, tokenParams: true });
-      window.location.href = successUrl;
+      window.location.href = loginSuccessUrl;
 
       await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
 
-      expect(localStorage.getItem(TEST_ID_TOKEN_KEY)).not.toBeNull();
+      expect(spyOnParseAndSaveTokenResponse).toBeCalled();
     });
 
-    test("stores the given access token", async () => {
-      storeData({ clientParams: true, tokenParams: true });
-      window.location.href = successUrl;
+    describe("parseAndValidateTokens", () => {
+      test("throws error if no token params stored", () => {
+        storeData({ clientParams: true });
+        window.location.href = loginSuccessUrl;
 
-      await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
+        expect(async () => {
+          await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
+        }).toThrowError();
 
-      expect(localStorage.getItem(TEST_ACCESS_TOKEN_KEY)).not.toBeNull();
+        expect(spyOnParseAndSaveTokenResponse.mock.results[0].type).toStrictEqual("throw");
+      });
+
+      test("removes tokenParams from storage", async () => {
+        storeData({ clientParams: true, tokenParams: true });
+        window.location.href = loginSuccessUrl;
+
+        await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
+
+        expect(localStorage.getItem(`entrust.tokenParams.${TEST_CLIENT_ID}`)).toBeNull();
+      });
+
+      test("stores the given ID token", async () => {
+        storeData({ clientParams: true, tokenParams: true });
+        window.location.href = loginSuccessUrl;
+
+        await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
+
+        expect(localStorage.getItem(TEST_ID_TOKEN_KEY)).not.toBeNull();
+      });
+
+      test("stores the given access token", async () => {
+        storeData({ clientParams: true, tokenParams: true });
+        window.location.href = loginSuccessUrl;
+
+        await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
+
+        expect(localStorage.getItem(TEST_ACCESS_TOKEN_KEY)).not.toBeNull();
+      });
+
+      test("the access token contains the correct information", async () => {
+        storeData({ clientParams: true, tokenParams: true });
+        window.location.href = loginSuccessUrl;
+
+        await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
+        // @ts-ignore accessing private var
+        const storedToken = NO_DEFAULT_IDAAS_CLIENT.persistenceManager.getAccessTokens()[0];
+        const validatedTokenResponse = spyOnParseAndSaveTokenResponse.mock.calls[0][0] as ValidatedTokenResponse;
+        const { tokenResponse } = validatedTokenResponse;
+
+        expect(storedToken.scope).toStrictEqual(tokenResponse.scope);
+        expect(storedToken.accessToken).toStrictEqual(tokenResponse.access_token);
+        expect(storedToken.refreshToken).toStrictEqual(tokenResponse.refresh_token);
+        expect(storedToken.audience).toStrictEqual(TEST_TOKEN_PARAMS.audience);
+        expect(storedToken.expiresAt).toStrictEqual(Math.floor(Date.now() / 1000) + 300);
+      });
+
+      test("the ID token contains the correct information", async () => {
+        storeData({ clientParams: true, tokenParams: true });
+        window.location.href = loginSuccessUrl;
+
+        await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
+        // @ts-ignore accessing private var
+        const storedToken = NO_DEFAULT_IDAAS_CLIENT.persistenceManager.getIdToken();
+        const validatedTokenResponse = spyOnParseAndSaveTokenResponse.mock.calls[0][0] as ValidatedTokenResponse;
+        const { decodedIdToken, encodedIdToken } = validatedTokenResponse;
+
+        expect(decodedIdToken).toStrictEqual(storedToken.decoded);
+        expect(encodedIdToken).toStrictEqual(storedToken.encoded);
+      });
     });
+  });
+  describe("onboarding event", () => {
+    test("returns the sign up response", async () => {
+      window.location.href = onboardingSuccessUrl;
+      const result = await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
 
-    test("the access token contains the correct information", async () => {
-      storeData({ clientParams: true, tokenParams: true });
-      window.location.href = successUrl;
-
-      await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
-      // @ts-ignore accessing private var
-      const storedToken = NO_DEFAULT_IDAAS_CLIENT.persistenceManager.getAccessTokens()[0];
-      const validatedTokenResponse = spyOnParseAndSaveTokenResponse.mock.calls[0][0] as ValidatedTokenResponse;
-      const { tokenResponse } = validatedTokenResponse;
-
-      expect(storedToken.scope).toStrictEqual(tokenResponse.scope);
-      expect(storedToken.accessToken).toStrictEqual(tokenResponse.access_token);
-      expect(storedToken.refreshToken).toStrictEqual(tokenResponse.refresh_token);
-      expect(storedToken.audience).toStrictEqual(TEST_TOKEN_PARAMS.audience);
-      expect(storedToken.expiresAt).toStrictEqual(Math.floor(Date.now() / 1000) + 300);
-    });
-
-    test("the ID token contains the correct information", async () => {
-      storeData({ clientParams: true, tokenParams: true });
-      window.location.href = successUrl;
-
-      await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
-      // @ts-ignore accessing private var
-      const storedToken = NO_DEFAULT_IDAAS_CLIENT.persistenceManager.getIdToken();
-      const validatedTokenResponse = spyOnParseAndSaveTokenResponse.mock.calls[0][0] as ValidatedTokenResponse;
-      const { decodedIdToken, encodedIdToken } = validatedTokenResponse;
-
-      expect(decodedIdToken).toStrictEqual(storedToken.decoded);
-      expect(encodedIdToken).toStrictEqual(storedToken.encoded);
+      expect(spyOnParseSignUpRedirect.mock.results[0].value).toStrictEqual(result);
     });
   });
 });

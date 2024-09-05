@@ -24,7 +24,7 @@ export interface TokenParams {
   scope: string;
 
   // RFC 9470
-  maxAge?: string;
+  maxAge?: number;
   acrValue?: string;
 }
 

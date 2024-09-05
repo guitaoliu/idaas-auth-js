@@ -15,9 +15,11 @@ import type {
   IdaasClientOptions,
   LoginOptions,
   LogoutOptions,
+  OnboardingResponse,
+  SignUpOptions,
   UserClaims,
 } from "./models";
-import { listenToPopup, openPopup } from "./utils/browser";
+import { listenToAuthorizePopup, listenToOnboardingPopup, openPopup } from "./utils/browser";
 import { base64UrlStringEncode, createRandomString, generateChallengeVerifierPair } from "./utils/crypto";
 import { expiryToEpochSeconds, formatUrl, sanitizeUri } from "./utils/format";
 import { readAccessToken, validateIdToken, validateUserInfoToken } from "./utils/jwt";
@@ -50,6 +52,34 @@ export class IdaasClient {
     this.clientId = clientId;
   }
 
+  public async signUp({ redirectUri, popup = false }: SignUpOptions = {}) {
+    const finalRedirectUri = redirectUri ?? sanitizeUri(window.location.href);
+    const url = await this.generateSignUpUrl({ redirectUri: finalRedirectUri, popup });
+
+    if (popup) {
+      const testPopupWindow = openPopup("");
+      const { response_modes_supported } = await this.getConfig();
+      const popupSupported = response_modes_supported?.includes("web_message");
+
+      if (!popupSupported) {
+        testPopupWindow.close();
+        throw new Error("Attempted to use popup but web_message is not supported by OpenID provider.");
+      }
+
+      const popupWindow = openPopup(url);
+      const onboardingResponse = await listenToOnboardingPopup(popupWindow, url);
+
+      // redirect only if the redirectUri is not the current uri
+      if (formatUrl(window.location.href) !== formatUrl(finalRedirectUri)) {
+        window.location.href = finalRedirectUri;
+      }
+      return onboardingResponse.userId;
+    }
+    window.location.href = url;
+
+    return null;
+  }
+
   /**
    * Perform the authorization code flow by authenticating the user to obtain an access token and optionally refresh and
    * ID tokens.
@@ -65,14 +95,14 @@ export class IdaasClient {
     popup = false,
     acrValues,
     maxAge,
-  }: LoginOptions = {}) {
+  }: LoginOptions = {}): Promise<string | null> {
     if (popup) {
       const popupWindow = openPopup("");
       const { response_modes_supported } = await this.getConfig();
       const popupSupported = response_modes_supported?.includes("web_message");
       if (!popupSupported) {
         popupWindow.close();
-        throw new Error("Attempting to use popup but web_message is not supported by OpenID provider.");
+        throw new Error("Attempted to use popup but web_message is not supported by OpenID provider.");
       }
       return await this.loginWithPopup({ audience, scope, redirectUri, useRefreshToken, acrValues, maxAge });
     }
@@ -106,7 +136,7 @@ export class IdaasClient {
     );
 
     const popup = openPopup(url);
-    const authorizeResponse = await listenToPopup(popup, url);
+    const authorizeResponse = await listenToAuthorizePopup(popup, url);
     const authorizeCode = this.validateAuthorizeResponse(authorizeResponse, state);
     const validatedTokenResponse = await this.requestAndValidateTokens(
       authorizeCode,
@@ -129,7 +159,14 @@ export class IdaasClient {
    * Perform the authorization code flow by redirecting to the OpenID Provider (OP) to authenticate the user and then redirect
    * with the necessary state and code.
    */
-  private async loginWithRedirect({ audience, scope, redirectUri, useRefreshToken, acrValues, maxAge }: LoginOptions) {
+  private async loginWithRedirect({
+    audience,
+    scope,
+    redirectUri,
+    useRefreshToken,
+    acrValues,
+    maxAge,
+  }: LoginOptions): Promise<void> {
     const finalRedirectUri = redirectUri ?? sanitizeUri(window.location.href);
     const { url, nonce, state, codeVerifier } = await this.generateAuthorizationUrl(
       "query",
@@ -155,24 +192,32 @@ export class IdaasClient {
    * Handle the callback to the login redirectUri post-authorize and pass the received code to the token endpoint to get
    * the access token, ID token, and optionally refresh token (optional). Additionally, validate the ID token claims.
    */
-  public async handleRedirect() {
-    const authorizeResponse = this.parseRedirectSearchParams();
-
+  public async handleRedirect(): Promise<OnboardingResponse | undefined> {
+    const { authorizeResponse, signUpResponse } = this.parseRedirect();
     // The current url is not an authorized callback url
-    if (!authorizeResponse) {
+    if (!(authorizeResponse || signUpResponse)) {
+      return;
+    }
+    if (authorizeResponse) {
+      const clientParams = this.persistenceManager.getClientParams();
+      if (!clientParams) {
+        throw new Error("Failed to recover IDaaS client state from local storage");
+      }
+      const { codeVerifier, redirectUri, state, nonce } = clientParams;
+
+      const authorizeCode = this.validateAuthorizeResponse(authorizeResponse, state);
+
+      const validatedTokenResponse = await this.requestAndValidateTokens(
+        authorizeCode,
+        codeVerifier,
+        redirectUri,
+        nonce,
+      );
+      this.parseAndSaveTokenResponse(validatedTokenResponse);
       return;
     }
 
-    const clientParams = this.persistenceManager.getClientParams();
-    if (!clientParams) {
-      throw new Error("Failed to recover IDaaS client state from local storage");
-    }
-    const { codeVerifier, redirectUri, state, nonce } = clientParams;
-
-    const authorizeCode = this.validateAuthorizeResponse(authorizeResponse, state);
-
-    const validatedTokenResponse = await this.requestAndValidateTokens(authorizeCode, codeVerifier, redirectUri, nonce);
-    this.parseAndSaveTokenResponse(validatedTokenResponse);
+    return signUpResponse;
   }
 
   /**
@@ -188,14 +233,14 @@ export class IdaasClient {
     return idToken.decoded as UserClaims;
   }
 
-  public isAuthenticated() {
+  public isAuthenticated(): boolean {
     return !!this.persistenceManager.getIdToken();
   }
 
   /**
    * Clear the application session and navigate to the OpenID Provider's (OP) endsession endpoint.
    */
-  public async logout({ redirectUri }: LogoutOptions = {}) {
+  public async logout({ redirectUri }: LogoutOptions = {}): Promise<void> {
     if (!this.isAuthenticated()) {
       // Discontinue logout, the user is not authenticated
       return;
@@ -209,7 +254,7 @@ export class IdaasClient {
   /**
    * Removes tokens from storage that have surpassed their max_age, and tokens that are expired and not refreshable.
    */
-  private removeUnusableTokens = () => {
+  private removeUnusableTokens = (): void => {
     const tokens = this.persistenceManager.getAccessTokens();
     if (!tokens) {
       return;
@@ -328,7 +373,7 @@ export class IdaasClient {
     throw new Error("Requested token not found, no fallback login specified");
   }
 
-  private parseAndSaveTokenResponse(validatedTokenResponse: ValidatedTokenResponse) {
+  private parseAndSaveTokenResponse(validatedTokenResponse: ValidatedTokenResponse): void {
     const { tokenResponse, decodedIdToken, encodedIdToken } = validatedTokenResponse;
     const { refresh_token, access_token, expires_in } = tokenResponse;
 
@@ -338,7 +383,7 @@ export class IdaasClient {
       throw new Error("No token params stored, unable to parse");
     }
     const { audience, scope, maxAge } = tokenParams;
-    const maxAgeExpiry = maxAge ? expiryToEpochSeconds(maxAge) : undefined;
+    const maxAgeExpiry = maxAge ? expiryToEpochSeconds(maxAge.toString()) : undefined;
 
     this.persistenceManager.removeTokenParams();
 
@@ -400,14 +445,35 @@ export class IdaasClient {
     return claims;
   }
 
-  private parseRedirectSearchParams(): AuthorizeResponse | null {
+  private parseRedirect() {
     const url = new URL(window.location.href);
     const searchParams = url.searchParams;
 
     if (searchParams.toString() === "") {
-      return null;
+      return { signUpResponse: null, authorizeResponse: null };
     }
 
+    const authorizeResponse = this.parseLoginRedirect(searchParams);
+    const signUpResponse = this.parseSignUpRedirect(searchParams);
+
+    url.search = "";
+    window.history.replaceState(null, document.title, url.toString());
+
+    return { signUpResponse, authorizeResponse };
+  }
+
+  private parseSignUpRedirect(searchParams: URLSearchParams): OnboardingResponse {
+    const error = searchParams.get("error");
+    const userId = searchParams.get("userId");
+
+    if (error) {
+      throw new Error(error);
+    }
+
+    return { userId, error };
+  }
+
+  private parseLoginRedirect(searchParams: URLSearchParams): AuthorizeResponse | null {
     const state = searchParams.get("state");
     const code = searchParams.get("code");
     const error = searchParams.get("error");
@@ -422,10 +488,6 @@ export class IdaasClient {
     if (!(code || error)) {
       return null;
     }
-
-    url.search = "";
-    window.history.replaceState(null, document.title, url.toString());
-
     return {
       state,
       code,
@@ -437,7 +499,7 @@ export class IdaasClient {
   private validateAuthorizeResponse(
     { state, code, error, error_description }: AuthorizeResponse,
     expectedState: string,
-  ) {
+  ): string {
     if (error) {
       throw new Error("Error during authorization", { cause: error_description });
     }
@@ -507,8 +569,8 @@ export class IdaasClient {
     scope: string = this.globalScope,
     audience: string | undefined = this.globalAudience,
     acrValues: string[] = [],
-    maxAge = "-1",
-  ) {
+    maxAge = -1,
+  ): Promise<{ url: string; nonce: string; state: string; codeVerifier: string }> {
     const { authorization_endpoint } = await this.getConfig();
     const scopeAsArray = scope.split(" ");
 
@@ -539,8 +601,8 @@ export class IdaasClient {
     // https://datatracker.ietf.org/doc/html/rfc7636#section-7.2
     url.searchParams.append("code_challenge_method", "S256");
 
-    if (Number.parseInt(maxAge) >= 0) {
-      url.searchParams.append("max_age", maxAge);
+    if (maxAge >= 0) {
+      url.searchParams.append("max_age", maxAge.toString());
       this.persistenceManager.saveTokenParams({ audience, scope: usedScope, maxAge });
     } else {
       this.persistenceManager.saveTokenParams({ audience, scope: usedScope });
@@ -552,6 +614,24 @@ export class IdaasClient {
     }
 
     return { url: url.toString(), nonce, state, codeVerifier };
+  }
+
+  private async generateSignUpUrl({
+    redirectUri = sanitizeUri(window.location.href),
+    popup,
+  }: SignUpOptions): Promise<string> {
+    const { issuer } = await this.getConfig();
+    const issuerOrigin = new URL(issuer).origin;
+    const signUpUrl = new URL(issuerOrigin);
+
+    signUpUrl.pathname = "/api/web/user/onboard";
+    signUpUrl.searchParams.append("redirect_uri", redirectUri);
+
+    if (popup) {
+      signUpUrl.searchParams.append("response_mode", "web_message");
+    }
+
+    return signUpUrl.toString();
   }
 
   /**

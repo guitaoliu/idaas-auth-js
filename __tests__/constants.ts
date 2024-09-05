@@ -2,7 +2,7 @@ import type { JWTPayload } from "jose";
 import { IdaasClient } from "../src";
 import type { AccessToken, ClientParams, IdToken, TokenParams } from "../src/PersistenceManager";
 import type { OidcConfig, TokenResponse } from "../src/api";
-import type { AuthorizeResponse } from "../src/models";
+import type { AuthorizeResponse, OnboardingResponse, SignUpOptions } from "../src/models";
 import type { ValidateIdTokenParams, ValidateUserInfoTokenParams } from "../src/utils/jwt";
 
 export const TEST_BASE_URI = "https://testing.com";
@@ -29,7 +29,7 @@ export const TEST_DIFFERENT_ACCESS_TOKEN = "differentAccessToken";
 export const TEST_ACR_CLAIM = "testingacrclaim";
 export const TEST_ENCODED_TOKEN =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0aW5nIiwiaXNzIjoidGVzdGluZ2lzc3VlciIsImFjciI6InVybjpvYXNpczpuYW1lczp0YzpTQU1MOjIuMDphYzpjbGFzc2VzOlRpbWVTeW5jVG9rZW4iLCJuYmYiOjE3MjI5NTE5NCwiYXV0aF90aW1lIjoxNzIyOTUxOTQsImV4cCI6MTcyMjk1MjI0LCJpYXQiOjE3MjI5NTE5NH0.7zCvyEgOe07ehsEytm7YAqUwVsCNbv5VOBd_vfqxaUY";
-
+export const TEST_USER_ID = "testingUserId";
 export const NO_DEFAULT_IDAAS_CLIENT = new IdaasClient({
   issuerUrl: TEST_ISSUER_URI,
   clientId: TEST_CLIENT_ID,
@@ -41,6 +41,11 @@ export const SET_DEFAULTS_IDAAS_CLIENT = new IdaasClient({
   globalScope: TEST_DIFFERENT_SCOPE,
   globalAudience: TEST_DIFFERENT_AUDIENCE,
 });
+
+export const TEST_SIGN_UP_OPTIONS: SignUpOptions = {
+  redirectUri: TEST_REDIRECT_URI,
+  popup: false,
+};
 
 export const TEST_TOKEN_PARAMS: TokenParams = {
   scope: TEST_SCOPE,
@@ -117,8 +122,13 @@ export const TEST_OIDC_CONFIG: OidcConfig = {
 export const TEST_AUTH_RESPONSE: AuthorizeResponse = {
   code: TEST_CODE,
   state: TEST_STATE,
-  error: "",
-  error_description: "",
+  error: null,
+  error_description: null,
+};
+
+export const TEST_ONBOARDING_RESPONSE: OnboardingResponse = {
+  userId: TEST_USER_ID,
+  error: null,
 };
 
 export const TEST_TOKEN_RESPONSE: TokenResponse = {

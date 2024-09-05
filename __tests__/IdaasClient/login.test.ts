@@ -178,7 +178,7 @@ describe("IdaasClient.login", () => {
     });
 
     test("auth url contains max_age param if maxAge >= 0", async () => {
-      await NO_DEFAULT_IDAAS_CLIENT.login({ maxAge: "0" });
+      await NO_DEFAULT_IDAAS_CLIENT.login({ maxAge: 0 });
 
       expect(spyOnGenerateAuthorizationUrl).toBeCalled();
       const { url: authUrl } = (await spyOnGenerateAuthorizationUrl.mock.results[0].value) as { url: string };
@@ -198,7 +198,7 @@ describe("IdaasClient.login", () => {
     });
 
     test("auth url does not contain max_age param if maxAge is negative", async () => {
-      await NO_DEFAULT_IDAAS_CLIENT.login({ maxAge: "-1" });
+      await NO_DEFAULT_IDAAS_CLIENT.login({ maxAge: -1 });
 
       expect(spyOnGenerateAuthorizationUrl).toBeCalled();
       const { url: authUrl } = (await spyOnGenerateAuthorizationUrl.mock.results[0].value) as { url: string };
@@ -253,7 +253,7 @@ describe("IdaasClient.login", () => {
   describe("login with popup", () => {
     // @ts-ignore wrong return type
     spyOn(browser, "openPopup").mockImplementation(() => "test");
-    spyOn(browser, "listenToPopup").mockResolvedValue(TEST_AUTH_RESPONSE);
+    spyOn(browser, "listenToAuthorizePopup").mockResolvedValue(TEST_AUTH_RESPONSE);
     spyOn(jwt, "validateIdToken").mockImplementation(() => {
       return { decodedJwt: TEST_ID_TOKEN_OBJECT.decoded, idToken: TEST_ID_TOKEN_OBJECT.encoded };
     });

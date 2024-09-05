@@ -34,6 +34,22 @@ export interface IdaasClientOptions {
    */
   globalUseRefreshToken?: boolean;
 }
+/**
+ * The configurable options for the signUp method.
+ */
+export interface SignUpOptions {
+  /**
+   * Determines the method of login that will be used to authenticate the user.
+   * The default setting is `false`.
+   */
+  popup?: boolean;
+
+  /**
+   * The URI to be redirected to after a successful login. The default value is the current page.
+   * This URI must be included in the `Login Redirect URI(s)` field in your IDaaS client application settings.
+   */
+  redirectUri?: string;
+}
 
 /**
  * The configurable options for the Login method.
@@ -80,7 +96,7 @@ export interface LoginOptions {
   /**
    * Specifies the maximum age of a token, this value does not change on token refresh.
    */
-  maxAge?: string;
+  maxAge?: number;
 }
 
 /**
@@ -155,6 +171,11 @@ export interface AuthorizeResponse {
   state: string | null;
   error: string | null;
   error_description: string | null;
+}
+
+export interface OnboardingResponse {
+  userId: string | null;
+  error: string | null;
 }
 
 /**
