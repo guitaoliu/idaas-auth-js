@@ -21,7 +21,7 @@ import type {
 } from "./models";
 import { listenToAuthorizePopup, listenToOnboardingPopup, openPopup } from "./utils/browser";
 import { base64UrlStringEncode, createRandomString, generateChallengeVerifierPair } from "./utils/crypto";
-import { expiryToEpochSeconds, formatUrl, sanitizeUri } from "./utils/format";
+import { calculateEpochExpiry, formatUrl, sanitizeUri } from "./utils/format";
 import { readAccessToken, validateIdToken, validateUserInfoToken } from "./utils/jwt";
 
 /**
@@ -262,12 +262,10 @@ export class IdaasClient {
     const now = Math.floor(Date.now() / 1000);
     // buffer (in seconds) to refresh/delete early, ensures an expired token is not returned
     const buffer = 15;
-    // leeway (in seconds) to give, ensures user can use tokens with a short max_age
-    const leeway = 15;
 
     for (const token of tokens) {
       if (token.maxAgeExpiry) {
-        if (now > token.maxAgeExpiry + leeway) {
+        if (now > token.maxAgeExpiry - buffer) {
           this.persistenceManager.removeAccessToken(token);
         }
       }
@@ -344,7 +342,9 @@ export class IdaasClient {
           access_token: newEncodedAccessToken,
           expires_in,
         } = await this.requestTokenUsingRefreshToken(refreshToken);
-        const newExpiration = expiryToEpochSeconds(expires_in);
+
+        const authTime = readAccessToken(newEncodedAccessToken)?.auth_time;
+        const newExpiration = calculateEpochExpiry(expires_in, authTime);
 
         // the refreshed access token to be stored, maintaining expired token's scope and audience
         const newAccessToken: AccessToken = {
@@ -376,14 +376,16 @@ export class IdaasClient {
   private parseAndSaveTokenResponse(validatedTokenResponse: ValidatedTokenResponse): void {
     const { tokenResponse, decodedIdToken, encodedIdToken } = validatedTokenResponse;
     const { refresh_token, access_token, expires_in } = tokenResponse;
-
-    const expiresAt = expiryToEpochSeconds(expires_in);
+    const authTime = readAccessToken(access_token)?.auth_time;
+    const expiresAt = calculateEpochExpiry(expires_in, authTime);
     const tokenParams = this.persistenceManager.getTokenParams();
+
     if (!tokenParams) {
       throw new Error("No token params stored, unable to parse");
     }
+
     const { audience, scope, maxAge } = tokenParams;
-    const maxAgeExpiry = maxAge ? expiryToEpochSeconds(maxAge.toString()) : undefined;
+    const maxAgeExpiry = maxAge ? calculateEpochExpiry(maxAge.toString(), authTime) : undefined;
 
     this.persistenceManager.removeTokenParams();
 

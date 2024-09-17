@@ -16,12 +16,13 @@ export const formatUrl = (initialUrl: string): string => {
 };
 
 /**
- * Convert an expiry time to seconds since epoch
+ * Calculate the expiry time of a token
  * @param expiresIn the time in milliseconds until expiry
+ * @param authTime the time at which the user authenticated to receive a token
  */
-export const expiryToEpochSeconds = (expiresIn: string): number => {
-  const issuedAt = Math.floor(Date.now() / 1000);
-  return Number.parseInt(expiresIn) + issuedAt;
+export const calculateEpochExpiry = (expiresIn: string, authTime = Math.floor(Date.now() / 1000).toString()) => {
+  const authenticatedAt = Number.parseInt(authTime);
+  return Number.parseInt(expiresIn) + authenticatedAt;
 };
 
 /**

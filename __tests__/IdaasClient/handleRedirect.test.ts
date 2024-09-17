@@ -1,6 +1,8 @@
 import { afterAll, afterEach, beforeEach, describe, expect, jest, spyOn, test } from "bun:test";
 import type { ValidatedTokenResponse } from "../../src/IdaasClient";
 // biome-ignore lint: needed for spyOn
+import * as format from "../../src/utils/format";
+// biome-ignore lint: needed for spyOn
 import * as jwt from "../../src/utils/jwt";
 import {
   NO_DEFAULT_IDAAS_CLIENT,
@@ -33,6 +35,8 @@ describe("IdaasClient.handleRedirect", () => {
   const spyOnValidateAuthorizeResponse = spyOn(NO_DEFAULT_IDAAS_CLIENT, "validateAuthorizeResponse");
   // @ts-ignore private method
   const spyOnParseAndSaveTokenResponse = spyOn(NO_DEFAULT_IDAAS_CLIENT, "parseAndSaveTokenResponse");
+  // @ts-ignore private method
+  const spyOnCalculateEpochExpiry = spyOn(format, "calculateEpochExpiry");
   const spyOnValidateIdToken = spyOn(jwt, "validateIdToken").mockImplementation(() => {
     return { decodedJwt: TEST_ID_TOKEN_OBJECT.decoded, idToken: TEST_ID_TOKEN_OBJECT.encoded };
   });
@@ -224,7 +228,7 @@ describe("IdaasClient.handleRedirect", () => {
       });
     });
 
-    test("parseAndValidateTokens is called", async () => {
+    test("parseAndSaveTokenResponse is called", async () => {
       storeData({ clientParams: true, tokenParams: true });
       window.location.href = loginSuccessUrl;
 
@@ -233,7 +237,7 @@ describe("IdaasClient.handleRedirect", () => {
       expect(spyOnParseAndSaveTokenResponse).toBeCalled();
     });
 
-    describe("parseAndValidateTokens", () => {
+    describe("parseAndSaveTokenResponse", () => {
       test("throws error if no token params stored", () => {
         storeData({ clientParams: true });
         window.location.href = loginSuccessUrl;
@@ -270,6 +274,36 @@ describe("IdaasClient.handleRedirect", () => {
         await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
 
         expect(localStorage.getItem(TEST_ACCESS_TOKEN_KEY)).not.toBeNull();
+      });
+
+      test("calculateEpochExpiry is called", async () => {
+        storeData({ clientParams: true, tokenParams: true });
+        window.location.href = loginSuccessUrl;
+
+        await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
+        expect(spyOnCalculateEpochExpiry).toBeCalled();
+      });
+
+      describe("calculateEpochExpiry", () => {
+        test("calculates correct expiry time using token's auth_time", () => {
+          const authTime = 1;
+          const expected = authTime + 300;
+
+          const result = format.calculateEpochExpiry("300", authTime.toString());
+
+          expect(result).toStrictEqual(expected);
+        });
+
+        test("calculates correct expiry time using default", async () => {
+          const expected = Math.floor(Date.now() / 1000) + 300;
+
+          storeData({ clientParams: true, tokenParams: true });
+          window.location.href = loginSuccessUrl;
+
+          await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
+
+          expect(spyOnCalculateEpochExpiry.mock.results[0].value).toStrictEqual(expected);
+        });
       });
 
       test("the access token contains the correct information", async () => {
