@@ -140,7 +140,7 @@ describe("IdaasClient.handleRedirect", () => {
     const result = await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
 
     expect(spyOnParseAndSaveTokenResponse).not.toBeCalled();
-    expect(result).toBeUndefined();
+    expect(result).toBeNull();
   });
 
   describe("authorization event", () => {

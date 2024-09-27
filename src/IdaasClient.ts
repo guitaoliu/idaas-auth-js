@@ -192,12 +192,13 @@ export class IdaasClient {
    * Handle the callback to the login redirectUri post-authorize and pass the received code to the token endpoint to get
    * the access token, ID token, and optionally refresh token (optional). Additionally, validate the ID token claims.
    */
-  public async handleRedirect(): Promise<OnboardingResponse | undefined> {
+  public async handleRedirect(): Promise<OnboardingResponse | null> {
     const { authorizeResponse, signUpResponse } = this.parseRedirect();
     // The current url is not an authorized callback url
     if (!(authorizeResponse || signUpResponse)) {
-      return;
+      return null;
     }
+
     if (authorizeResponse) {
       const clientParams = this.persistenceManager.getClientParams();
       if (!clientParams) {
@@ -214,7 +215,7 @@ export class IdaasClient {
         nonce,
       );
       this.parseAndSaveTokenResponse(validatedTokenResponse);
-      return;
+      return null;
     }
 
     return signUpResponse;
@@ -458,13 +459,10 @@ export class IdaasClient {
     const authorizeResponse = this.parseLoginRedirect(searchParams);
     const signUpResponse = this.parseSignUpRedirect(searchParams);
 
-    url.search = "";
-    window.history.replaceState(null, document.title, url.toString());
-
     return { signUpResponse, authorizeResponse };
   }
 
-  private parseSignUpRedirect(searchParams: URLSearchParams): OnboardingResponse {
+  private parseSignUpRedirect(searchParams: URLSearchParams): OnboardingResponse | null {
     const error = searchParams.get("error");
     const userId = searchParams.get("userId");
 
@@ -472,7 +470,7 @@ export class IdaasClient {
       throw new Error(error);
     }
 
-    return { userId, error };
+    return userId || error ? { userId, error } : null;
   }
 
   private parseLoginRedirect(searchParams: URLSearchParams): AuthorizeResponse | null {
@@ -490,6 +488,11 @@ export class IdaasClient {
     if (!(code || error)) {
       return null;
     }
+
+    const url = new URL(window.location.href);
+    url.search = "";
+    window.history.replaceState(null, document.title, url.toString());
+
     return {
       state,
       code,
