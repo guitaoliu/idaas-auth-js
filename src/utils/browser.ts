@@ -4,7 +4,7 @@ const DEFAULT_POPUP_TIMEOUT_SECONDS = 300;
 
 export const openPopup = (popupUrl: string) => {
   const width = 500;
-  const height = 600;
+  const height = 700;
   const left = window.screenX + (window.innerWidth - width) / 2;
   const top = window.screenY + (window.innerHeight - height) / 2;
 
