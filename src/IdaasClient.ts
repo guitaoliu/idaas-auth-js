@@ -42,19 +42,28 @@ export class IdaasClient {
   private readonly persistenceManager: PersistenceManager;
   private readonly issuerUrl: string;
   private readonly clientId: string;
+  private readonly authApiId: string;
   private readonly globalScope: string;
   private readonly globalAudience: string | undefined;
   private readonly globalUseRefreshToken: boolean;
 
   private config?: OidcConfig;
 
-  constructor({ issuerUrl, clientId, globalAudience, globalScope, globalUseRefreshToken }: IdaasClientOptions) {
+  constructor({
+    issuerUrl,
+    clientId,
+    globalAudience,
+    globalScope,
+    globalUseRefreshToken,
+    authApiId,
+  }: IdaasClientOptions) {
     this.globalAudience = globalAudience;
     this.globalScope = globalScope ?? "openid profile email";
     this.globalUseRefreshToken = globalUseRefreshToken ?? false;
     this.issuerUrl = formatUrl(issuerUrl);
     this.persistenceManager = new PersistenceManager(clientId);
     this.clientId = clientId;
+    this.authApiId = authApiId;
   }
 
   public async signUp({ redirectUri, popup = false }: SignUpOptions = {}) {
@@ -669,7 +678,7 @@ export class IdaasClient {
   }: AuthenticationRequestParams): Promise<AUTH_REQUEST_RETURN> {
     const issuerOrigin = this.getIssuerOrigin();
     const queryAuthEndpoint = `${issuerOrigin}/api/web/v2/authentication/users`;
-    const queryUserAuthResponse = await queryUserAuthOptions(userId, this.clientId, queryAuthEndpoint);
+    const queryUserAuthResponse = await queryUserAuthOptions(userId, this.authApiId, queryAuthEndpoint);
 
     this.parseResponseErrors(queryUserAuthResponse);
 
@@ -697,7 +706,7 @@ export class IdaasClient {
     }
 
     const authChallengeEndpoint = `${issuerOrigin}/api/web/v2/authentication/users/authenticate/${method}`;
-    const requestAuthChallengeResponse = await requestAuthChallenge(userId, this.clientId, authChallengeEndpoint);
+    const requestAuthChallengeResponse = await requestAuthChallenge(userId, this.authApiId, authChallengeEndpoint);
 
     this.parseResponseErrors(requestAuthChallengeResponse);
 
@@ -740,7 +749,7 @@ export class IdaasClient {
     // TODO clean
     if (method === "FACE") {
       authResponse = await submitAuthChallengeResponse(
-        this.clientId,
+        this.authApiId,
         token,
         authResponseEndpoint,
         false,
@@ -748,7 +757,7 @@ export class IdaasClient {
         faceResponse,
       );
     } else {
-      authResponse = await submitAuthChallengeResponse(this.clientId, token, authResponseEndpoint, false, response);
+      authResponse = await submitAuthChallengeResponse(this.authApiId, token, authResponseEndpoint, false, response);
     }
 
     this.parseResponseErrors(authResponse);
@@ -778,7 +787,7 @@ export class IdaasClient {
     const authResponseEndpoint = `${this.getIssuerOrigin()}/api/web/v1/authentication/users/authenticate/${method}/complete`;
 
     for (let i = 0; i < secondsToPoll; i++) {
-      const authResponse = await submitAuthChallengeResponse(this.clientId, token, authResponseEndpoint);
+      const authResponse = await submitAuthChallengeResponse(this.authApiId, token, authResponseEndpoint);
 
       try {
         this.parseResponseErrors(authResponse);
@@ -814,7 +823,7 @@ export class IdaasClient {
 
     const cancelEndpoint = `${this.getIssuerOrigin()}/api/web/v1/authentication/users/authenticate/${method}/complete`;
 
-    await submitAuthChallengeResponse(this.clientId, token, cancelEndpoint, true);
+    await submitAuthChallengeResponse(this.authApiId, token, cancelEndpoint, true);
   }
   private parseResponseErrors(response: { errorCode: string; errorMessage: string }) {
     const { errorCode, errorMessage } = response;

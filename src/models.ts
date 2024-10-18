@@ -13,6 +13,11 @@ export interface IdaasClientOptions {
   clientId: string;
 
   /**
+   * The Application ID of your IDaaS Authentication API
+   */
+  authApiId: string;
+
+  /**
    * The global scope to be used.
    *
    * This defaults to `openid profile email` if not set. If you are setting extra scopes and require `profile` and `email` to be included then you must include them in the provided scope.
