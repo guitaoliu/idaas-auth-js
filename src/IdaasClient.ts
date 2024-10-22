@@ -13,7 +13,7 @@ import {
   submitAuthChallengeResponse,
 } from "./api";
 import type {
-  AUTH_REQUEST_RETURN,
+  AuthRequestReturn,
   AuthenticationRequestParams,
   AuthorizeResponse,
   GetAccessTokenOptions,
@@ -675,7 +675,7 @@ export class IdaasClient {
     userId,
     preferredAuthenticationMethod,
     strict,
-  }: AuthenticationRequestParams): Promise<AUTH_REQUEST_RETURN> {
+  }: AuthenticationRequestParams): Promise<AuthRequestReturn> {
     const issuerOrigin = this.getIssuerOrigin();
     const queryAuthEndpoint = `${issuerOrigin}/api/web/v2/authentication/users`;
     const queryUserAuthResponse = await queryUserAuthOptions(userId, this.authApiId, queryAuthEndpoint);
@@ -718,18 +718,10 @@ export class IdaasClient {
 
     this.persistenceManager.setAuthenticationParams({ method, token, userId });
 
-    // TODO: other specific returns
-    switch (method) {
-      case "FACE":
-        return {
-          method,
-          authSpecificReturn: faceChallenge,
-        };
-      default:
-        return {
-          method,
-        };
-    }
+    return {
+      method,
+      faceChallenge,
+    };
   }
 
   // faceResponse is the workflow run id to check for bio auth

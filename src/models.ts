@@ -218,11 +218,11 @@ export interface AuthenticationChallengeParams {
 
 export interface AuthenticationRequestParams {
   userId: string;
-  preferredAuthenticationMethod?: IDAAS_AUTHENTICATION_METHODS;
+  preferredAuthenticationMethod?: IdaasAuthenticationMethods;
   strict?: boolean;
 }
 
-type IDAAS_AUTHENTICATION_METHODS =
+export type IdaasAuthenticationMethods =
   | "MACHINE"
   | "PASSWORD"
   | "EXTERNAL"
@@ -242,24 +242,26 @@ type IDAAS_AUTHENTICATION_METHODS =
   | "USER_CERTIFICATE"
   | "FACE";
 
-export interface AUTH_REQUEST_RETURN {
+export interface AuthRequestReturn {
   method: string;
-  authSpecificReturn?: IDAAS_FACE_CHALLENGE | IDAAS_FIDO_CHALLENGE | IDAAS_KBA_CHALLENGE;
+  faceChallenge?: IdaasFaceChallenge;
+  fidoChallenge?: IdaasFidoChallenge;
+  kbaChallenge?: IdaasKbaChallenge;
 }
 
-interface IDAAS_FACE_CHALLENGE {
+export interface IdaasFaceChallenge {
   applicantId: string;
   sdkToken: string;
   workflowRunId: string;
 }
 
-interface IDAAS_FIDO_CHALLENGE {
+export interface IdaasFidoChallenge {
   allowCredentials: string[];
   challenge: string;
   timeout: number;
 }
 
-interface IDAAS_KBA_CHALLENGE {
+export interface IdaasKbaChallenge {
   id: string;
   userQuestions: {
     answer: string;
