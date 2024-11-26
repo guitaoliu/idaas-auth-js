@@ -253,6 +253,7 @@ export interface IdaasFaceChallenge {
   applicantId: string;
   sdkToken: string;
   workflowRunId: string;
+  device: "WEB" | "MOBILE";
 }
 
 export interface IdaasFidoChallenge {
