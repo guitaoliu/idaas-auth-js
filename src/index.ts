@@ -6,8 +6,10 @@ export type {
   LogoutOptions,
   GetAccessTokenOptions,
   SignUpOptions,
-  AuthRequestReturn,
+  AuthenticationResponse,
   AuthenticationRequestParams,
+  AuthenticationSubmissionParams,
+  IdaasAuthenticationMethod,
 } from "./models";
 
 export type {

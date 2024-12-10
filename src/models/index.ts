@@ -1,3 +1,5 @@
+import type { GridChallenge, KbaChallenge, TempAccessCodeChallenge } from "./openapi-ts";
+
 /**
  * The configurable options of the IdaasClient.
  */
@@ -11,11 +13,6 @@ export interface IdaasClientOptions {
    * The Client ID found on your IDaaS Application settings page.
    */
   clientId: string;
-
-  /**
-   * The Application ID of your IDaaS Authentication API
-   */
-  authApiId: string;
 
   /**
    * The global scope to be used.
@@ -210,22 +207,87 @@ export interface UserClaims {
   [propName: string]: unknown;
 }
 
-export interface AuthenticationChallengeParams {
-  method: string;
-  token: string;
-  userId: string;
-}
-
+/**
+ * The configurable options when requesting an authentication challenge.
+ */
 export interface AuthenticationRequestParams {
-  userId: string;
-  preferredAuthenticationMethod?: IdaasAuthenticationMethods;
+  userId?: string;
+  scope?: string;
+  useRefreshToken?: boolean;
+  preferredAuthenticationMethod?: IdaasAuthenticationMethod;
   strict?: boolean;
+  mutualChallengeEnabled?: boolean;
+  audience?: string;
+  maxAge?: number;
 }
 
-export type IdaasAuthenticationMethods =
-  | "MACHINE"
+/**
+ * The configurable options when submitting a response to an authentication challenge.
+ */
+export interface AuthenticationSubmissionParams {
+  /**
+   * The user's response to the authentication challenge.
+   */
+  response?: string;
+
+  /**
+   * The user's answers to the KBA challenge questions.
+   * Answers must be in the order of the questions returned when requesting the challenge.
+   */
+  // TODO: individual responses (ie gridResponse, password, OTP, etc) ???
+  kbaChallengeAnswers?: string[];
+}
+
+export interface AuthenticationResponse {
+  token?: string;
+  /**
+   * A flag indicating if authentication has been completed.
+   */
+  authenticationCompleted?: boolean;
+
+  /**
+   * The second factor authenticator that will be used.
+   */
+  secondFactorMethod?: IdaasAuthenticationMethod;
+
+  /**
+   * The method of authentication that will be used.
+   */
+  method?: IdaasAuthenticationMethod;
+
+  /**
+   * A flag indicating if `pollAuth` should be called.
+   */
+  pollForCompletion?: boolean;
+
+  /**
+   * The user ID of the authenticated user.
+   */
+  userId?: string;
+
+  /**
+   * Parameters required for completing the `GRID` authentication method.
+   */
+  gridChallenge?: GridChallenge;
+
+  /**
+   * Parameters required for completing the `KBA` authentication method.
+   */
+  kbaChallenge?: KbaChallenge;
+
+  /**
+   * Parameters defining the behaviour of the `TEMP_ACCESS_CODE` authentication method.
+   */
+  tempAccessCodeChallenge?: TempAccessCodeChallenge;
+
+  /**
+   * Push authentication mutual challenge for token or Face Biometric.
+   */
+  pushMutualChallenge?: string;
+}
+
+export type IdaasAuthenticationMethod =
   | "PASSWORD"
-  | "EXTERNAL"
   | "KBA"
   | "TEMP_ACCESS_CODE"
   | "OTP"
@@ -235,40 +297,5 @@ export type IdaasAuthenticationMethods =
   | "FIDO"
   | "SMARTCREDENTIALPUSH"
   | "PASSWORD_AND_SECONDFACTOR"
-  | "SMART_LOGIN"
-  | "IDP"
   | "PASSKEY"
-  | "IDP_AND_SECONDFACTOR"
-  | "USER_CERTIFICATE"
-  | "FACE";
-
-export interface AuthRequestReturn {
-  method: string;
-  faceChallenge?: IdaasFaceChallenge;
-  fidoChallenge?: IdaasFidoChallenge;
-  kbaChallenge?: IdaasKbaChallenge;
-}
-
-export interface IdaasFaceChallenge {
-  applicantId: string;
-  sdkToken: string;
-  workflowRunId: string;
-  device: "WEB" | "MOBILE";
-}
-
-export interface IdaasFidoChallenge {
-  allowCredentials: string[];
-  challenge: string;
-  timeout: number;
-}
-
-export interface IdaasKbaChallenge {
-  id: string;
-  userQuestions: {
-    answer: string;
-    id: string;
-    question: string;
-  }[];
-}
-
-// TODO: other types
+  | "FACE"; // TODO onfido sdk integration for web auth

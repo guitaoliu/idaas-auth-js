@@ -1,5 +1,4 @@
 import type { JWTPayload } from "jose";
-import type { AuthenticationChallengeParams } from "./models";
 
 /**
  * The parameters that are created during the creation of the authorization URL.
@@ -61,28 +60,12 @@ export class PersistenceManager {
   private readonly accessTokenStorageKey: string;
   private readonly idTokenStorageKey: string;
   private readonly tokenParamsStorageKey: string;
-  private readonly authenticationParamsStorageKey: string;
 
   constructor(clientId: string) {
     this.clientParamsStorageKey = `entrust.${clientId}.clientParams`;
     this.accessTokenStorageKey = `entrust.${clientId}.accessTokens`;
     this.idTokenStorageKey = `entrust.${clientId}.idToken`;
     this.tokenParamsStorageKey = `entrust.${clientId}.tokenParams`;
-    this.authenticationParamsStorageKey = `entrust.${clientId}.authenticationParams`;
-  }
-
-  public getAuthenticationParams(): AuthenticationChallengeParams | null {
-    return this.get(this.authenticationParamsStorageKey);
-  }
-
-  public setAuthenticationParams(data: AuthenticationChallengeParams) {
-    const stringifiedData = JSON.stringify(data);
-
-    this.save(this.authenticationParamsStorageKey, stringifiedData);
-  }
-
-  public clearAuthenticationParams() {
-    localStorage.removeItem(this.authenticationParamsStorageKey);
   }
   /**
    * Saves values in local storage that are required for the OIDC auth flow.
@@ -220,6 +203,5 @@ export class PersistenceManager {
     localStorage.removeItem(this.accessTokenStorageKey);
     localStorage.removeItem(this.idTokenStorageKey);
     localStorage.removeItem(this.tokenParamsStorageKey);
-    localStorage.removeItem(this.authenticationParamsStorageKey);
   }
 }

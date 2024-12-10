@@ -1,4 +1,5 @@
-import type { JWTPayload } from "jose";
+import { type JWTPayload, decodeJwt } from "jose";
+import { AuthenticationTransaction } from "./AuthenticationTransaction";
 import { type AccessToken, PersistenceManager } from "./PersistenceManager";
 import {
   type AccessTokenRequest,
@@ -7,14 +8,12 @@ import {
   type TokenResponse,
   fetchOpenidConfiguration,
   getUserInfo,
-  queryUserAuthOptions,
-  requestAuthChallenge,
   requestToken,
-  submitAuthChallengeResponse,
 } from "./api";
 import type {
-  AuthRequestReturn,
   AuthenticationRequestParams,
+  AuthenticationResponse,
+  AuthenticationSubmissionParams,
   AuthorizeResponse,
   GetAccessTokenOptions,
   IdaasClientOptions,
@@ -42,29 +41,20 @@ export class IdaasClient {
   private readonly persistenceManager: PersistenceManager;
   private readonly issuerUrl: string;
   private readonly clientId: string;
-  private readonly authApiId: string;
   private readonly globalScope: string;
   private readonly globalAudience: string | undefined;
   private readonly globalUseRefreshToken: boolean;
+  private authenticationTransaction?: AuthenticationTransaction;
 
   private config?: OidcConfig;
-  private faceResponse?: string;
 
-  constructor({
-    issuerUrl,
-    clientId,
-    globalAudience,
-    globalScope,
-    globalUseRefreshToken,
-    authApiId,
-  }: IdaasClientOptions) {
+  constructor({ issuerUrl, clientId, globalAudience, globalScope, globalUseRefreshToken }: IdaasClientOptions) {
     this.globalAudience = globalAudience;
     this.globalScope = globalScope ?? "openid profile email";
     this.globalUseRefreshToken = globalUseRefreshToken ?? false;
     this.issuerUrl = formatUrl(issuerUrl);
     this.persistenceManager = new PersistenceManager(clientId);
     this.clientId = clientId;
-    this.authApiId = authApiId;
   }
 
   public async signUp({ redirectUri, popup = false }: SignUpOptions = {}) {
@@ -319,7 +309,7 @@ export class IdaasClient {
       // Tokens that have the required audience and all scopes
       accessTokens = accessTokens.filter((token) => {
         const tokenScopes = token.scope.split(" ");
-        return requestedScopes.every((scope) => tokenScopes.includes(scope));
+        return requestedScopes.every((scope: string) => tokenScopes.includes(scope));
       });
 
       if (acrValues && acrValues.length > 0) {
@@ -646,7 +636,6 @@ export class IdaasClient {
     if (popup) {
       signUpUrl.searchParams.append("response_mode", "web_message");
     }
-
     return signUpUrl.toString();
   }
 
@@ -672,155 +661,71 @@ export class IdaasClient {
     return new URL(this.issuerUrl).origin;
   }
 
-  public async requestAuthChallenge({
-    userId,
-    preferredAuthenticationMethod,
-    strict,
-  }: AuthenticationRequestParams): Promise<AuthRequestReturn> {
-    const issuerOrigin = this.getIssuerOrigin();
-    const queryAuthEndpoint = `${issuerOrigin}/api/web/v2/authentication/users`;
-    const queryUserAuthResponse = await queryUserAuthOptions(userId, this.authApiId, queryAuthEndpoint);
+  private initializeAuthenticationTransaction = async (options: AuthenticationRequestParams) => {
+    const config = await this.getConfig();
 
-    this.parseResponseErrors(queryUserAuthResponse);
+    this.authenticationTransaction = new AuthenticationTransaction({
+      config,
+      ...options,
+      useRefreshToken: options.useRefreshToken ?? this.globalUseRefreshToken,
+      audience: options.audience ?? this.globalAudience,
+      scope: options.scope ?? this.globalScope,
+      clientId: this.clientId,
+    });
+  };
 
-    const { userLoginEnabled, authenticationTypes } = queryUserAuthResponse;
+  public async requestChallenge(options: AuthenticationRequestParams): Promise<AuthenticationResponse> {
+    await this.initializeAuthenticationTransaction(options);
 
-    if (!userLoginEnabled) {
-      throw new Error("The User Login flow must be enabled");
+    if (!this.authenticationTransaction) {
+      throw new Error();
     }
 
-    const preferredMethodAvailable: boolean = authenticationTypes.includes(preferredAuthenticationMethod);
-    let method = "";
+    const authenticationResponse = await this.authenticationTransaction.requestAuthChallenge();
 
-    if (!preferredMethodAvailable && strict) {
-      throw new Error("The preferred method of authentication is not available for this user!");
+    if (authenticationResponse.authenticationCompleted) {
+      this.handleAuthenticationTransactionSuccess();
     }
-
-    if (preferredAuthenticationMethod && preferredMethodAvailable) {
-      method = preferredAuthenticationMethod;
-    } else {
-      method = authenticationTypes[0];
-    }
-
-    if (!method) {
-      throw new Error("No available methods to authenticate this user!");
-    }
-
-    const authChallengeEndpoint = `${issuerOrigin}/api/web/v2/authentication/users/authenticate/${method}`;
-    const requestAuthChallengeResponse = await requestAuthChallenge(userId, this.authApiId, authChallengeEndpoint);
-
-    this.parseResponseErrors(requestAuthChallengeResponse);
-
-    const { token, faceChallenge } = requestAuthChallengeResponse;
-
-    if (!token) {
-      throw new Error("No token in auth challenge request response");
-    }
-
-    if (faceChallenge) {
-      this.faceResponse = faceChallenge.workflowRunId;
-    }
-
-    this.persistenceManager.setAuthenticationParams({ method, token, userId });
-
-    return {
-      method,
-      faceChallenge,
-    };
+    return authenticationResponse;
   }
 
-  // faceResponse is the workflow run id to check for bio auth
-  // TODO: params for other specific methods
-  public async submitAuthChallengeResponse(response: string): Promise<boolean> {
-    const authenticationParams = this.persistenceManager.getAuthenticationParams();
+  public async submitChallenge(options: AuthenticationSubmissionParams): Promise<AuthenticationResponse> {
+    if (!this.authenticationTransaction) {
+      throw new Error("No authentication transaction in progress!");
+    }
+    const authenticationResponse = await this.authenticationTransaction.submitAuthChallenge({ ...options });
 
-    if (!authenticationParams) {
-      throw new Error("Failed to parse authentication params, no authentication params stored!");
+    if (authenticationResponse.authenticationCompleted) {
+      this.handleAuthenticationTransactionSuccess();
     }
 
-    const { method, token } = authenticationParams;
-
-    const authResponse = await submitAuthChallengeResponse(
-      this.authApiId,
-      token,
-      this.getIssuerOrigin(),
-      method,
-      false,
-      response,
-    );
-
-    this.parseResponseErrors(authResponse);
-    const { authenticationCompleted } = authResponse;
-
-    if (authenticationCompleted) {
-      this.persistenceManager.clearAuthenticationParams();
-      return true;
-    }
-    return false;
+    return authenticationResponse;
   }
 
-  public async pollForAuthCompletion(secondsToPoll = 30) {
-    if (secondsToPoll < 1 || secondsToPoll > 600) {
-      // TODO: error message
-      throw new Error("secondsToPoll must be between 1 and 600");
+  private handleAuthenticationTransactionSuccess = () => {
+    if (!this.authenticationTransaction) {
+      throw new Error("No authentication transaction in progress!");
     }
 
-    const authenticationParams = this.persistenceManager.getAuthenticationParams();
+    const { idToken, accessToken, refreshToken, scope, expiresAt, maxAge, audience } =
+      this.authenticationTransaction.getTransactionDetails();
 
-    if (!authenticationParams) {
-      throw new Error("Failed to parse authentication params, no authentication params stored!");
-    }
-    const { method, token } = authenticationParams;
-
-    for (let i = 0; i < secondsToPoll; i++) {
-      const authResponse = await submitAuthChallengeResponse(
-        this.authApiId,
-        token,
-        this.getIssuerOrigin(),
-        method,
-        false,
-        "",
-        this.faceResponse,
-      );
-
-      try {
-        this.parseResponseErrors(authResponse);
-      } catch (error) {
-        // The authentication request was cancelled
-        if ((error as { message: string }).message === "no_transaction") {
-          return false;
-        }
-        // Throw other errors
-        throw error;
-      }
-
-      const { authenticationCompleted } = authResponse;
-
-      if (authenticationCompleted) {
-        return true;
-      }
-
-      // wait 1 second between requests
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+    if (!(idToken && accessToken && expiresAt && scope)) {
+      throw new Error("Required values not present in token response");
     }
 
-    await this.cancelAuthRequest();
-    throw new Error("Timed out while waiting for success response");
-  }
+    const maxAgeExpiry = maxAge ? calculateEpochExpiry(maxAge.toString()) : undefined;
 
-  public async cancelAuthRequest() {
-    const authenticationParams = this.persistenceManager.getAuthenticationParams();
-    if (!authenticationParams) {
-      throw new Error("Failed to parse authentication params, no authentication params stored!");
-    }
-    const { token, method } = authenticationParams;
+    this.persistenceManager.saveIdToken({ encoded: idToken, decoded: decodeJwt(idToken) });
+    this.persistenceManager.saveAccessToken({
+      accessToken,
+      expiresAt,
+      scope,
+      refreshToken,
+      audience,
+      maxAgeExpiry,
+    });
 
-    await submitAuthChallengeResponse(this.authApiId, token, this.getIssuerOrigin(), method, true);
-  }
-  private parseResponseErrors(response: { errorCode: string; errorMessage: string }) {
-    const { errorCode, errorMessage } = response;
-    if (errorCode) {
-      throw new Error(errorCode, { cause: errorMessage });
-    }
-  }
+    this.authenticationTransaction = undefined;
+  };
 }
