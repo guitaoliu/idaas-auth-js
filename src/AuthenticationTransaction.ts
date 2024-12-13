@@ -1,3 +1,4 @@
+import type { AuthenticationCredential, PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/types";
 import {
   type JwtIdaasTokenRequest,
   type OidcConfig,
@@ -19,8 +20,14 @@ import type {
   UserAuthenticateQueryResponse,
   UserChallengeParameters,
 } from "./models/openapi-ts";
+import { browserSupportPasskey } from "./utils/browser";
 import { base64UrlStringEncode, createRandomString, generateChallengeVerifierPair } from "./utils/crypto";
-import { calculateEpochExpiry } from "./utils/format";
+import {
+  base64URLStringToBuffer,
+  bufferToBase64URLString,
+  calculateEpochExpiry,
+  toPublicKeyCredentialDescriptor,
+} from "./utils/format";
 
 export interface AuthenticationDetails {
   method?: IdaasAuthenticationMethod;
@@ -110,6 +117,90 @@ export class AuthenticationTransaction {
     this.config = config;
   }
 
+  private async handlePasskeyLogin(): Promise<AuthenticationResponse> {
+    if (!(await browserSupportPasskey())) {
+      throw new Error("This browser does not support passkey");
+    }
+
+    const { method } = this.authenticationDetails;
+
+    if (!(this.requiredDetails && method)) {
+      throw new Error("Failed to retrieve needed values");
+    }
+
+    const { applicationId } = this.requiredDetails;
+    const requestAuthChallengeResponse: AuthenticatedResponse = await requestAuthChallenge(
+      {
+        applicationId,
+      },
+      method,
+      this.issuerOrigin,
+    );
+
+    const { token, fidoChallenge } = requestAuthChallengeResponse;
+    if (!(token && fidoChallenge)) {
+      throw new Error("error parsing params");
+    }
+    const authChallenge: PublicKeyCredentialRequestOptionsJSON = {
+      challenge: fidoChallenge.challenge ?? "",
+    };
+
+    const authenticationResponseJson = await this.startWebAuthn(authChallenge, true);
+
+    return await submitAuthChallenge(
+      {
+        fidoResponse: {
+          authenticatorData: authenticationResponseJson.response.authenticatorData,
+          clientDataJSON: authenticationResponseJson.response.clientDataJSON,
+          credentialId: authenticationResponseJson.id,
+          signature: authenticationResponseJson.response.signature,
+          userHandle: authenticationResponseJson.response.userHandle,
+        },
+      },
+      method,
+      token,
+      this.issuerOrigin,
+    );
+  }
+
+  private async handleFidoLogin(): Promise<AuthenticationResponse> {
+    if (!this.requiredDetails) {
+      throw new Error("Failed to retrieve required values");
+    }
+    const { applicationId } = this.requiredDetails;
+    const { token, method, isSecondFactor } = this.authenticationDetails;
+    const fidoChallenge = this.fidoChallenge;
+
+    if (!(token && method && fidoChallenge)) {
+      throw new Error();
+    }
+    const authChallenge: PublicKeyCredentialRequestOptionsJSON = {
+      challenge: fidoChallenge.challenge ?? "",
+      allowCredentials: fidoChallenge.allowCredentials?.map((val) => {
+        return { id: val, type: "public-key" };
+      }),
+    };
+
+    const authenticationResponseJson = await this.startWebAuthn(authChallenge);
+
+    return await submitAuthChallenge(
+      {
+        fidoResponse: {
+          authenticatorData: authenticationResponseJson.response.authenticatorData,
+          clientDataJSON: authenticationResponseJson.response.clientDataJSON,
+          credentialId: authenticationResponseJson.id,
+          signature: authenticationResponseJson.response.signature,
+        },
+        applicationId,
+        secondFactorAuthenticator: isSecondFactor ? "FIDO" : undefined,
+        userId: this.userId,
+      },
+      method,
+      token,
+      this.issuerOrigin,
+    );
+  }
+
   /**
    * Requests an authentication challenge from the IDaaS Authentication API.
    */
@@ -129,6 +220,10 @@ export class AuthenticationTransaction {
     this.authenticationDetails.method = method;
     this.authenticationDetails.secondFactor = secondFactor;
 
+    if (method === "PASSKEY") {
+      return await this.handlePasskeyLogin();
+    }
+
     const requestBody = this.constructUserChallengeParams();
 
     const requestAuthChallengeResponse: AuthenticatedResponse = await requestAuthChallenge(
@@ -145,6 +240,10 @@ export class AuthenticationTransaction {
     this.fidoChallenge = fidoChallenge;
     this.faceChallenge = faceChallenge;
     this.kbaChallenge = kbaChallenge;
+
+    if (method === "FIDO") {
+      return await this.handleFidoLogin();
+    }
 
     const pollForCompletion = this.shouldPoll(method);
 
@@ -387,6 +486,10 @@ export class AuthenticationTransaction {
     this.kbaChallenge = kbaChallenge;
     this.authenticationDetails.token = secondFactorToken;
 
+    if (secondFactor === "FIDO") {
+      return await this.handleFidoLogin();
+    }
+
     const pollForCompletion = this.shouldPoll(secondFactor);
     return {
       ...secondFactorRequest,
@@ -573,5 +676,65 @@ export class AuthenticationTransaction {
       }
     }
     return requestBody;
+  };
+
+  private startWebAuthn = async (optionsJSON: PublicKeyCredentialRequestOptionsJSON, useBrowserAutofill = false) => {
+    let allowCredentials = undefined;
+    if (optionsJSON.allowCredentials?.length !== 0) {
+      allowCredentials = optionsJSON.allowCredentials?.map(toPublicKeyCredentialDescriptor);
+    }
+
+    // We need to convert some values to Uint8Arrays before passing the credentials to the navigator
+    const publicKey: PublicKeyCredentialRequestOptions = {
+      ...optionsJSON,
+      challenge: base64URLStringToBuffer(optionsJSON.challenge),
+      allowCredentials,
+    };
+
+    // Prepare options for `.get()`
+    const getOptions: CredentialRequestOptions = {};
+
+    /**
+     * Set up the page to prompt the user to select a credential for authentication via the browser's
+     * input autofill mechanism.
+     */
+
+    if (useBrowserAutofill) {
+      getOptions.mediation = "conditional";
+      // Conditional UI requires an empty allow list
+      publicKey.allowCredentials = [];
+    }
+
+    // Finalize options
+    getOptions.publicKey = publicKey;
+    // Set up the ability to cancel this request if the user attempts another
+    // getOptions.signal = WebAuthnAbortService.createNewAbortSignal();
+    // TODO ^
+
+    // Wait for the user to complete assertion
+    const credential = (await navigator.credentials.get(getOptions)) as AuthenticationCredential;
+
+    if (!credential) {
+      throw new Error("Authentication was not completed");
+    }
+
+    const { id, response } = credential;
+
+    let userHandle = undefined;
+
+    if (response.userHandle) {
+      userHandle = bufferToBase64URLString(response.userHandle);
+    }
+
+    // Convert values to base64 to make it easier to send back to the server
+    return {
+      id,
+      response: {
+        authenticatorData: bufferToBase64URLString(response.authenticatorData),
+        clientDataJSON: bufferToBase64URLString(response.clientDataJSON),
+        signature: bufferToBase64URLString(response.signature),
+        userHandle,
+      },
+    };
   };
 }

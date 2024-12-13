@@ -122,3 +122,7 @@ export const listenToOnboardingPopup = (popup: Window, url: string) => {
     });
   });
 };
+
+export const browserSupportPasskey = async (): Promise<boolean> => {
+  return window.PublicKeyCredential && (await PublicKeyCredential.isConditionalMediationAvailable());
+};
