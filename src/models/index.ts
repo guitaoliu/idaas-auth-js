@@ -1,3 +1,4 @@
+import type { OidcConfig } from "../api";
 import type {
   FaceChallenge,
   GridChallenge,
@@ -60,9 +61,9 @@ export interface SignUpOptions {
 }
 
 /**
- * The configurable options for the Login method.
+ * The configurable options for the `login` and `requestChallenge` methods.
  */
-export interface LoginOptions {
+interface BaseLoginOptions {
   /**
    * The audience to be used for requesting API access. This defaults to the `globalAudience` set in your `IdaasClientOptions` if not set.
    */
@@ -78,17 +79,27 @@ export interface LoginOptions {
   scope?: string;
 
   /**
-   * The URI to be redirected to after a successful login. The default value is the current page.
-   * This URI must be included in the `Login Redirect URI(s)` field in your IDaaS client application settings.
-   */
-  redirectUri?: string;
-
-  /**
    * Determines whether the token obtained from this login request can use refresh tokens.  This defaults to the `globalUseRefreshToken` set in your `IdaasClientOptions` if not set.
    *
    * Note: Use of refresh tokens must be enabled on your IDaaS client application.
    */
   useRefreshToken?: boolean;
+
+  /**
+   * Specifies the maximum age of a token, this value does not change on token refresh.
+   */
+  maxAge?: number;
+}
+
+/**
+ * The configurable options specific to the OIDC `login` method.
+ */
+export interface OidcLoginOptions extends BaseLoginOptions {
+  /**
+   * The URI to be redirected to after a successful login. The default value is the current page.
+   * This URI must be included in the `Login Redirect URI(s)` field in your IDaaS client application settings.
+   */
+  redirectUri?: string;
 
   /**
    * Determines the method of login that will be used to authenticate the user.
@@ -100,11 +111,6 @@ export interface LoginOptions {
    * Determines the strength/quality of the method used to authenticate the user.
    */
   acrValues?: string[];
-
-  /**
-   * Specifies the maximum age of a token, this value does not change on token refresh.
-   */
-  maxAge?: number;
 }
 
 /**
@@ -213,18 +219,45 @@ export interface UserClaims {
   [propName: string]: unknown;
 }
 
+export interface AuthenticationTransactionOptions extends AuthenticationRequestParams {
+  /**
+   * The OIDC config of the IDaaSClient.
+   */
+  oidcConfig: OidcConfig;
+
+  /**
+   * The client ID of the IDaasClient.
+   */
+  clientId: string;
+}
+
 /**
  * The configurable options when requesting an authentication challenge.
  */
-export interface AuthenticationRequestParams {
+export interface AuthenticationRequestParams extends BaseLoginOptions {
+  /**
+   * The user ID of the user to request the challenge for.
+   */
   userId?: string;
-  scope?: string;
-  useRefreshToken?: boolean;
+
+  /**
+   * The preferred method of authentication.
+   */
   preferredAuthenticationMethod?: IdaasAuthenticationMethod;
+
+  /**
+   * Determines if the preferred authentication method must be used.
+   */
   strict?: boolean;
+
+  /**
+   * Determines if the user must answer a mutual challenge for the TOKENPUSH and FACE authenticators.
+   */
   mutualChallengeEnabled?: boolean;
-  audience?: string;
-  maxAge?: number;
+
+  /**
+   * The transaction details of the request.
+   */
   transactionDetails?: TransactionDetail[];
 }
 
@@ -241,7 +274,7 @@ export interface AuthenticationSubmissionParams {
    * The user's answers to the KBA challenge questions.
    * Answers must be in the order of the questions returned when requesting the challenge.
    */
-  // TODO: individual responses (ie gridResponse, password, OTP, etc)
+  // TODO: individual responses (ie gridResponse, password, OTP, etc) ??
   kbaChallengeAnswers?: string[];
 }
 
@@ -282,6 +315,11 @@ export interface AuthenticationResponse {
    */
   kbaChallenge?: KbaChallenge;
 
+  /**
+   * Parameters required for completing the `FACE` authentication method.
+   *
+   * TODO: onfido SDK integration, not necessary when complete. Required for WEB bio auth
+   */
   faceChallenge?: FaceChallenge;
 
   /**
@@ -308,3 +346,24 @@ export type IdaasAuthenticationMethod =
   | "PASSWORD_AND_SECONDFACTOR"
   | "PASSKEY"
   | "FACE"; // TODO onfido sdk integration for web auth
+
+export interface PublicKeyCredentialRequestOptionsJSON
+  extends Omit<PublicKeyCredentialRequestOptions, "challenge" | "allowCredentials"> {
+  challenge: string;
+  allowCredentials?: { id: string; type: PublicKeyCredentialType }[];
+}
+
+export interface PublicKeyCredentialDescriptorJSON extends Omit<PublicKeyCredentialDescriptor, "id"> {
+  id: string;
+}
+
+interface AuthenticationCredentialResponse {
+  userHandle: ArrayBuffer;
+  authenticatorData: ArrayBuffer;
+  clientDataJSON: ArrayBuffer;
+  signature: ArrayBuffer;
+}
+
+export interface AuthenticationCredential extends Credential {
+  response: AuthenticationCredentialResponse;
+}

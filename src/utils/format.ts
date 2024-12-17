@@ -1,4 +1,4 @@
-import type { PublicKeyCredentialDescriptorJSON } from "@simplewebauthn/types";
+import type { PublicKeyCredentialDescriptorJSON } from "../models";
 
 /**
  * Format string as an https url and remove any trailing /

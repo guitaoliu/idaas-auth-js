@@ -1,5 +1,5 @@
 import { afterAll, afterEach, describe, expect, jest, spyOn, test } from "bun:test";
-import type { LoginOptions } from "../../src";
+import type { OidcLoginOptions } from "../../src";
 import type { AccessToken } from "../../src/PersistenceManager";
 import type { TokenResponse } from "../../src/api";
 import {
@@ -57,7 +57,7 @@ describe("IdaasClient.getAccessToken", () => {
           fallbackAuthorizationOptions: {},
         });
 
-        const loginRequest = spyOnLogin.mock.calls[0][0] as LoginOptions;
+        const loginRequest = spyOnLogin.mock.calls[0][0] as OidcLoginOptions;
         expect(loginRequest.scope).toStrictEqual(TEST_SCOPE);
       });
 
@@ -67,7 +67,7 @@ describe("IdaasClient.getAccessToken", () => {
           fallbackAuthorizationOptions: {},
         });
 
-        const loginRequest = spyOnLogin.mock.calls[0][0] as LoginOptions;
+        const loginRequest = spyOnLogin.mock.calls[0][0] as OidcLoginOptions;
         expect(loginRequest.audience).toStrictEqual(TEST_AUDIENCE);
       });
 
@@ -77,7 +77,7 @@ describe("IdaasClient.getAccessToken", () => {
           fallbackAuthorizationOptions: {},
         });
 
-        const loginRequest = spyOnLogin.mock.calls[0][0] as LoginOptions;
+        const loginRequest = spyOnLogin.mock.calls[0][0] as OidcLoginOptions;
         expect(loginRequest.acrValues).toStrictEqual([TEST_ACR_CLAIM]);
       });
     });
@@ -99,7 +99,7 @@ describe("IdaasClient.getAccessToken", () => {
           },
         });
 
-        const loginRequest = spyOnLogin.mock.calls[0][0] as LoginOptions;
+        const loginRequest = spyOnLogin.mock.calls[0][0] as OidcLoginOptions;
         expect(loginRequest.popup).toBeTrue();
       });
 
@@ -111,7 +111,7 @@ describe("IdaasClient.getAccessToken", () => {
           },
         });
 
-        const loginRequest = spyOnLogin.mock.calls[0][0] as LoginOptions;
+        const loginRequest = spyOnLogin.mock.calls[0][0] as OidcLoginOptions;
         expect(loginRequest.popup).toBeFalse();
       });
     });
@@ -130,7 +130,7 @@ describe("IdaasClient.getAccessToken", () => {
           },
         });
 
-        const loginRequest = spyOnLogin.mock.calls[0][0] as LoginOptions;
+        const loginRequest = spyOnLogin.mock.calls[0][0] as OidcLoginOptions;
         expect(loginRequest.popup).toBeTrue();
       });
 
@@ -141,7 +141,7 @@ describe("IdaasClient.getAccessToken", () => {
           },
         });
 
-        const loginRequest = spyOnLogin.mock.calls[0][0] as LoginOptions;
+        const loginRequest = spyOnLogin.mock.calls[0][0] as OidcLoginOptions;
         expect(loginRequest.popup).toBeFalse();
       });
     });

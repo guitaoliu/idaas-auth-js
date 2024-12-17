@@ -17,8 +17,8 @@ import type {
   AuthorizeResponse,
   GetAccessTokenOptions,
   IdaasClientOptions,
-  LoginOptions,
   LogoutOptions,
+  OidcLoginOptions,
   OnboardingResponse,
   SignUpOptions,
   UserClaims,
@@ -44,8 +44,8 @@ export class IdaasClient {
   private readonly globalScope: string;
   private readonly globalAudience: string | undefined;
   private readonly globalUseRefreshToken: boolean;
-  private authenticationTransaction?: AuthenticationTransaction;
 
+  private authenticationTransaction?: AuthenticationTransaction;
   private config?: OidcConfig;
 
   constructor({ issuerUrl, clientId, globalAudience, globalScope, globalUseRefreshToken }: IdaasClientOptions) {
@@ -100,7 +100,7 @@ export class IdaasClient {
     popup = false,
     acrValues,
     maxAge,
-  }: LoginOptions = {}): Promise<string | null> {
+  }: OidcLoginOptions = {}): Promise<string | null> {
     if (popup) {
       const popupWindow = openPopup("");
       const { response_modes_supported } = await this.getConfig();
@@ -127,7 +127,7 @@ export class IdaasClient {
     useRefreshToken,
     acrValues,
     maxAge,
-  }: LoginOptions): Promise<string | null> {
+  }: OidcLoginOptions): Promise<string | null> {
     const finalRedirectUri = redirectUri ?? sanitizeUri(window.location.href);
 
     const { url, nonce, state, codeVerifier } = await this.generateAuthorizationUrl(
@@ -171,7 +171,7 @@ export class IdaasClient {
     useRefreshToken,
     acrValues,
     maxAge,
-  }: LoginOptions): Promise<void> {
+  }: OidcLoginOptions): Promise<void> {
     const finalRedirectUri = redirectUri ?? sanitizeUri(window.location.href);
     const { url, nonce, state, codeVerifier } = await this.generateAuthorizationUrl(
       "query",
@@ -662,10 +662,10 @@ export class IdaasClient {
   }
 
   private initializeAuthenticationTransaction = async (options: AuthenticationRequestParams) => {
-    const config = await this.getConfig();
+    const oidcConfig = await this.getConfig();
 
     this.authenticationTransaction = new AuthenticationTransaction({
-      config,
+      oidcConfig,
       ...options,
       useRefreshToken: options.useRefreshToken ?? this.globalUseRefreshToken,
       audience: options.audience ?? this.globalAudience,
@@ -673,22 +673,27 @@ export class IdaasClient {
       clientId: this.clientId,
     });
   };
-  public async requestChallenge(options: AuthenticationRequestParams): Promise<AuthenticationResponse> {
+
+  public async requestChallenge(options: AuthenticationRequestParams = {}): Promise<AuthenticationResponse> {
+    // 1. Prepare transaction
     await this.initializeAuthenticationTransaction(options);
 
     if (!this.authenticationTransaction) {
       throw new Error();
     }
 
-    const authenticationResponse = await this.authenticationTransaction.requestAuthChallenge();
-
-    if (authenticationResponse.authenticationCompleted) {
-      this.handleAuthenticationTransactionSuccess();
-    }
-    return authenticationResponse;
+    // 2. Request authentication challenge, return response
+    return await this.authenticationTransaction.requestAuthChallenge();
   }
 
-  public authenticatePassword = async (options: AuthenticationRequestParams, password: string) => {
+  public authenticatePassword = async ({
+    options,
+    password,
+  }: {
+    options: AuthenticationRequestParams;
+    password: string;
+  }) => {
+    // 1. Prepare transaction with PASSWORD method
     await this.initializeAuthenticationTransaction({
       ...options,
       strict: true,
@@ -699,7 +704,10 @@ export class IdaasClient {
       throw new Error();
     }
 
+    // 2. Request authentication challenge
     await this.authenticationTransaction.requestAuthChallenge();
+
+    // 3. Submit authentication challenge response
     const authResult = await this.authenticationTransaction.submitAuthChallenge({ response: password });
 
     if (authResult.authenticationCompleted) {
@@ -711,8 +719,9 @@ export class IdaasClient {
 
   public async pollAuth(): Promise<AuthenticationResponse> {
     if (!this.authenticationTransaction) {
-      throw new Error("No authentication transacation in progress!");
+      throw new Error("No authentication transaction in progress!");
     }
+
     const authenticationResponse = await this.authenticationTransaction.pollForAuthCompletion();
 
     if (authenticationResponse.authenticationCompleted) {
@@ -723,15 +732,17 @@ export class IdaasClient {
 
   public async cancelAuth(): Promise<void> {
     if (!this.authenticationTransaction) {
-      throw new Error("No authentication transacation in progress!");
+      throw new Error("No authentication transaction in progress!");
     }
-    return await this.authenticationTransaction.cancelAuthChallenge();
+
+    await this.authenticationTransaction.cancelAuthChallenge();
   }
 
-  public async submitChallenge(options: AuthenticationSubmissionParams): Promise<AuthenticationResponse> {
+  public async submitChallenge(options: AuthenticationSubmissionParams = {}): Promise<AuthenticationResponse> {
     if (!this.authenticationTransaction) {
-      throw new Error("No authentication transacation in progress!");
+      throw new Error("No authentication transaction in progress!");
     }
+
     const authenticationResponse = await this.authenticationTransaction.submitAuthChallenge({ ...options });
 
     if (authenticationResponse.authenticationCompleted) {
@@ -743,15 +754,18 @@ export class IdaasClient {
 
   private handleAuthenticationTransactionSuccess = () => {
     if (!this.authenticationTransaction) {
-      throw new Error("should never happen");
+      throw new Error("No authentication transaction in progress!");
     }
 
     const { idToken, accessToken, refreshToken, scope, expiresAt, maxAge, audience } =
       this.authenticationTransaction.getAuthenticationDetails();
+
+    // Require the access token, id token, and necessary claims
     if (!(idToken && accessToken && expiresAt && scope)) {
-      throw new Error("Error saving id token from authentication");
+      throw new Error("Error retrieving tokens from transaction");
     }
 
+    // Saving tokens
     this.persistenceManager.saveIdToken({ encoded: idToken, decoded: decodeJwt(idToken) });
     this.persistenceManager.saveAccessToken({
       accessToken,

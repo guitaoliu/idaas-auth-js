@@ -1,4 +1,3 @@
-import type { AuthenticationCredential, PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/types";
 import {
   type JwtIdaasTokenRequest,
   type OidcConfig,
@@ -8,11 +7,18 @@ import {
   requestToken,
   submitAuthChallenge,
 } from "./api";
-import type { AuthenticationResponse, AuthenticationSubmissionParams, IdaasAuthenticationMethod } from "./models";
+import type {
+  AuthenticationCredential,
+  AuthenticationResponse,
+  AuthenticationSubmissionParams,
+  AuthenticationTransactionOptions,
+  IdaasAuthenticationMethod,
+  PublicKeyCredentialRequestOptionsJSON,
+} from "./models";
 import type {
   AuthenticatedResponse,
-  ErrorInfo,
   FIDOChallenge,
+  FIDOResponse,
   FaceChallenge,
   KbaChallenge,
   TransactionDetail,
@@ -31,14 +37,8 @@ import {
 
 export interface AuthenticationDetails {
   method?: IdaasAuthenticationMethod;
-  token?: string;
   secondFactor?: IdaasAuthenticationMethod;
-  isSecondFactor?: boolean;
-  continuePolling?: boolean;
-  authRequestKey?: string;
-  applicationId?: string;
   scope?: string;
-  useRefreshToken?: boolean;
   expiresAt?: number;
   idToken?: string;
   refreshToken?: string;
@@ -56,25 +56,30 @@ interface RequiredDetails {
 export class AuthenticationTransaction {
   private readonly clientId: string;
   private readonly issuerOrigin: string;
-  private readonly config: OidcConfig;
+  private readonly mutualChallengeEnabled: boolean;
+  private readonly oidcConfig: OidcConfig;
+  private readonly strict: boolean;
+  private readonly useRefreshToken: boolean;
   private readonly userId: string;
 
-  private readonly preferredAuthenticationMethod?: IdaasAuthenticationMethod;
-  private readonly strict?: boolean;
-  private readonly mutualChallengeEnabled?: boolean;
   private readonly audience?: string;
   private readonly maxAge?: number;
+  private readonly preferredAuthenticationMethod?: IdaasAuthenticationMethod;
   private readonly transactionDetails?: TransactionDetail[];
 
   private authenticationDetails: AuthenticationDetails;
+  private continuePolling = false;
+  private isSecondFactor = false;
 
-  private requiredDetails?: RequiredDetails;
   private faceChallenge?: FaceChallenge;
-  private kbaChallenge?: KbaChallenge;
   private fidoChallenge?: FIDOChallenge;
+  private fidoResponse?: FIDOResponse;
+  private kbaChallenge?: KbaChallenge;
+  private requiredDetails?: RequiredDetails;
+  private token?: string;
 
   constructor({
-    config,
+    oidcConfig,
     userId,
     scope,
     useRefreshToken,
@@ -85,95 +90,63 @@ export class AuthenticationTransaction {
     audience,
     maxAge,
     transactionDetails,
-  }: {
-    config: OidcConfig;
-    userId?: string;
-    scope?: string;
-    useRefreshToken?: boolean;
-    clientId: string;
-    preferredAuthenticationMethod?: IdaasAuthenticationMethod;
-    strict?: boolean;
-    mutualChallengeEnabled?: boolean;
-    audience?: string;
-    maxAge?: number;
-    transactionDetails?: TransactionDetail[];
-  }) {
-    const { issuer } = config;
+  }: AuthenticationTransactionOptions) {
+    const { issuer } = oidcConfig;
 
     this.authenticationDetails = {
       scope,
-      useRefreshToken,
     };
 
-    this.transactionDetails = transactionDetails;
-    this.maxAge = maxAge;
     this.audience = audience;
-    this.mutualChallengeEnabled = mutualChallengeEnabled;
-    this.preferredAuthenticationMethod = preferredAuthenticationMethod;
-    this.strict = strict;
-    this.userId = userId ?? "";
-    this.issuerOrigin = new URL(issuer).origin;
     this.clientId = clientId;
-    this.config = config;
+    this.issuerOrigin = new URL(issuer).origin;
+    this.maxAge = maxAge;
+    this.mutualChallengeEnabled = mutualChallengeEnabled ?? false;
+    this.oidcConfig = oidcConfig;
+    this.preferredAuthenticationMethod = preferredAuthenticationMethod;
+    this.strict = strict ?? false;
+    this.transactionDetails = transactionDetails;
+    this.useRefreshToken = useRefreshToken ?? false;
+    this.userId = userId ?? "";
   }
 
-  private async handlePasskeyLogin(): Promise<AuthenticationResponse> {
+  private async handlePasskeyLogin(): Promise<void> {
     if (!(await browserSupportPasskey())) {
       throw new Error("This browser does not support passkey");
     }
 
     const { method } = this.authenticationDetails;
+    const token = this.token;
+    const fidoChallenge = this.fidoChallenge;
 
-    if (!(this.requiredDetails && method)) {
-      throw new Error("Failed to retrieve needed values");
+    if (!(token && method && fidoChallenge)) {
+      throw new Error("Failed to retrieve required values");
     }
 
-    const { applicationId } = this.requiredDetails;
-    const requestAuthChallengeResponse: AuthenticatedResponse = await requestAuthChallenge(
-      {
-        applicationId,
-      },
-      method,
-      this.issuerOrigin,
-    );
-
-    const { token, fidoChallenge } = requestAuthChallengeResponse;
-    if (!(token && fidoChallenge)) {
-      throw new Error("error parsing params");
-    }
     const authChallenge: PublicKeyCredentialRequestOptionsJSON = {
       challenge: fidoChallenge.challenge ?? "",
     };
 
     const authenticationResponseJson = await this.startWebAuthn(authChallenge, true);
 
-    return await submitAuthChallenge(
-      {
-        fidoResponse: {
-          authenticatorData: authenticationResponseJson.response.authenticatorData,
-          clientDataJSON: authenticationResponseJson.response.clientDataJSON,
-          credentialId: authenticationResponseJson.id,
-          signature: authenticationResponseJson.response.signature,
-          userHandle: authenticationResponseJson.response.userHandle,
-        },
-      },
-      method,
-      token,
-      this.issuerOrigin,
-    );
+    this.fidoResponse = {
+      authenticatorData: authenticationResponseJson.response.authenticatorData,
+      clientDataJSON: authenticationResponseJson.response.clientDataJSON,
+      credentialId: authenticationResponseJson.id,
+      signature: authenticationResponseJson.response.signature,
+      userHandle: authenticationResponseJson.response.userHandle,
+    };
   }
 
-  private async handleFidoLogin(): Promise<AuthenticationResponse> {
-    if (!this.requiredDetails) {
-      throw new Error("Failed to retrieve required values");
-    }
-    const { applicationId } = this.requiredDetails;
-    const { token, method, isSecondFactor } = this.authenticationDetails;
+  private async handleFidoLogin(): Promise<void> {
+    const { method } = this.authenticationDetails;
+    const token = this.token;
     const fidoChallenge = this.fidoChallenge;
 
     if (!(token && method && fidoChallenge)) {
-      throw new Error();
+      throw new Error("Failed to retrieve required values");
     }
+
     const authChallenge: PublicKeyCredentialRequestOptionsJSON = {
       challenge: fidoChallenge.challenge ?? "",
       allowCredentials: fidoChallenge.allowCredentials?.map((val) => {
@@ -183,28 +156,19 @@ export class AuthenticationTransaction {
 
     const authenticationResponseJson = await this.startWebAuthn(authChallenge);
 
-    return await submitAuthChallenge(
-      {
-        fidoResponse: {
-          authenticatorData: authenticationResponseJson.response.authenticatorData,
-          clientDataJSON: authenticationResponseJson.response.clientDataJSON,
-          credentialId: authenticationResponseJson.id,
-          signature: authenticationResponseJson.response.signature,
-        },
-        applicationId,
-        secondFactorAuthenticator: isSecondFactor ? "FIDO" : undefined,
-        userId: this.userId,
-      },
-      method,
-      token,
-      this.issuerOrigin,
-    );
+    this.fidoResponse = {
+      authenticatorData: authenticationResponseJson.response.authenticatorData,
+      clientDataJSON: authenticationResponseJson.response.clientDataJSON,
+      credentialId: authenticationResponseJson.id,
+      signature: authenticationResponseJson.response.signature,
+    };
   }
 
   /**
    * Requests an authentication challenge from the IDaaS Authentication API.
    */
   public async requestAuthChallenge(): Promise<AuthenticationResponse> {
+    // 1. Generate /authorizejwt URL and fetch OIDC details
     const { url, codeVerifier } = await this.generateJwtAuthorizeUrl();
     const { authRequestKey, applicationId } = await getAuthRequestId(url);
 
@@ -214,45 +178,46 @@ export class AuthenticationTransaction {
       codeVerifier,
     };
 
-    // get authentication method and second factor
+    // 2. Get authentication method and second factor method
     const { authenticationMethod: method, secondFactor } = await this.determineAuthenticationMethod();
 
     this.authenticationDetails.method = method;
     this.authenticationDetails.secondFactor = secondFactor;
 
-    if (method === "PASSKEY") {
-      return await this.handlePasskeyLogin();
-    }
-
+    // 3. Prepare request body
     const requestBody = this.constructUserChallengeParams();
 
+    // 4. Send request to IDaaS Auth API
     const requestAuthChallengeResponse: AuthenticatedResponse = await requestAuthChallenge(
       requestBody,
       method,
       this.issuerOrigin,
     );
 
-    this.parseResponseErrors(requestAuthChallengeResponse);
-
     const { token, faceChallenge, fidoChallenge, kbaChallenge } = requestAuthChallengeResponse;
 
-    this.authenticationDetails.token = token;
+    // 5. Update stored values with IDaaS Auth API response
+    this.token = token;
     this.fidoChallenge = fidoChallenge;
     this.faceChallenge = faceChallenge;
     this.kbaChallenge = kbaChallenge;
 
-    if (method === "FIDO") {
-      return await this.handleFidoLogin();
+    if (method === "PASSKEY") {
+      await this.handlePasskeyLogin();
     }
 
     const pollForCompletion = this.shouldPoll(method);
 
-    return { ...requestAuthChallengeResponse, pollForCompletion, method, userId: this.userId };
+    return {
+      ...requestAuthChallengeResponse,
+      pollForCompletion,
+      method,
+      userId: this.userId,
+    };
   }
 
   private async generateJwtAuthorizeUrl() {
-    const { useRefreshToken } = this.authenticationDetails;
-    const url = new URL(`${this.config.issuer}/authorizejwt`);
+    const url = new URL(`${this.oidcConfig.issuer}/authorizejwt`);
     const { codeVerifier, codeChallenge } = await generateChallengeVerifierPair();
     const state = base64UrlStringEncode(createRandomString());
     const nonce = base64UrlStringEncode(createRandomString());
@@ -260,7 +225,7 @@ export class AuthenticationTransaction {
     const scopeAsArray = scope.split(" ");
     scopeAsArray.push("openid");
 
-    if (useRefreshToken) {
+    if (this.useRefreshToken) {
       scopeAsArray.push("offline_access");
     }
 
@@ -301,13 +266,11 @@ export class AuthenticationTransaction {
       {
         transactionDetails: this.transactionDetails,
         userId: this.userId,
-        authRequestKey: this.authenticationDetails.authRequestKey,
+        authRequestKey: this.requiredDetails.authRequestKey,
         applicationId: this.requiredDetails.applicationId,
       },
       this.issuerOrigin,
     );
-
-    this.parseResponseErrors(queryUserAuthResponse);
 
     const { authenticationTypes, availableSecondFactor } = queryUserAuthResponse;
 
@@ -377,7 +340,8 @@ export class AuthenticationTransaction {
     const requestBody = this.constructUserChallengeParams();
     const response = await requestAuthChallenge(requestBody, "PASSWORD_AND_SECONDFACTOR", this.issuerOrigin);
 
-    this.authenticationDetails.token = response.token;
+    // update stored token
+    this.token = response.token;
 
     return response;
   }
@@ -404,10 +368,14 @@ export class AuthenticationTransaction {
     response,
     kbaChallengeAnswers,
   }: AuthenticationSubmissionParams): Promise<AuthenticationResponse> {
-    const { method, token, isSecondFactor } = this.authenticationDetails;
-
+    const { method } = this.authenticationDetails;
+    const token = this.token;
     if (!(method && token)) {
       throw new Error("Error parsing authentication params");
+    }
+
+    if (method === "FIDO") {
+      await this.handleFidoLogin();
     }
 
     this.parseKbaChallengeAnswers(kbaChallengeAnswers);
@@ -415,14 +383,14 @@ export class AuthenticationTransaction {
     const requestBody = this.constructUserAuthenticateParams("SUBMIT", response);
 
     const authenticationResponse = await submitAuthChallenge(requestBody, method, token, this.issuerOrigin);
+    this.token = authenticationResponse.token;
 
     // Second factor auth will occur
-    if (method === "PASSWORD_AND_SECONDFACTOR" && !isSecondFactor) {
-      return await this.prepareForSecondFactorSubmission(authenticationResponse);
+    if (method === "PASSWORD_AND_SECONDFACTOR" && !this.isSecondFactor) {
+      return await this.prepareForSecondFactorSubmission();
     }
 
     if (authenticationResponse.authenticationCompleted) {
-      this.authenticationDetails.token = authenticationResponse.token;
       await this.handleSuccessfulAuthentication();
     }
 
@@ -435,15 +403,20 @@ export class AuthenticationTransaction {
     }
     const { authRequestKey, codeVerifier } = this.requiredDetails;
 
+    if (!this.token) {
+      throw new Error("IDaaS token not stored");
+    }
+
     const requestBody: JwtIdaasTokenRequest = {
       client_id: this.clientId,
       code: authRequestKey,
       code_verifier: codeVerifier,
       grant_type: "jwt_idaas",
-      jwt: this.authenticationDetails.token as string,
+      jwt: this.token,
     };
+
     const { id_token, access_token, expires_in, refresh_token } = await requestToken(
-      this.config.token_endpoint,
+      this.oidcConfig.token_endpoint,
       requestBody,
     );
 
@@ -451,7 +424,7 @@ export class AuthenticationTransaction {
       throw new Error("failed to fetch id token and access token from IDaaS");
     }
 
-    if (this.authenticationDetails.useRefreshToken && !refresh_token) {
+    if (this.useRefreshToken && !refresh_token) {
       throw new Error("failed to fetch refresh token from IDaaS");
     }
 
@@ -466,28 +439,26 @@ export class AuthenticationTransaction {
     };
   };
 
-  private prepareForSecondFactorSubmission = async (
-    firstFactorResponse: AuthenticationResponse,
-  ): Promise<AuthenticationResponse> => {
-    this.authenticationDetails.isSecondFactor = true;
-    const { token } = firstFactorResponse;
+  private prepareForSecondFactorSubmission = async (): Promise<AuthenticationResponse> => {
+    this.isSecondFactor = true;
 
     const secondFactor = this.authenticationDetails.secondFactor;
     if (!secondFactor) {
       throw new Error("error parsing authentication params");
     }
 
-    this.authenticationDetails.token = token;
+    const { method } = this.authenticationDetails;
+
     const secondFactorRequest = await this.requestSecondFactorAuth();
     const { faceChallenge, fidoChallenge, kbaChallenge, token: secondFactorToken } = secondFactorRequest;
 
     this.fidoChallenge = fidoChallenge;
     this.faceChallenge = faceChallenge;
     this.kbaChallenge = kbaChallenge;
-    this.authenticationDetails.token = secondFactorToken;
+    this.token = secondFactorToken;
 
     if (secondFactor === "FIDO") {
-      return await this.handleFidoLogin();
+      await this.handleFidoLogin();
     }
 
     const pollForCompletion = this.shouldPoll(secondFactor);
@@ -495,23 +466,20 @@ export class AuthenticationTransaction {
       ...secondFactorRequest,
       secondFactorMethod: secondFactor,
       pollForCompletion,
-      method: firstFactorResponse.method,
+      method,
     };
   };
 
   private async poll(): Promise<AuthenticatedResponse> {
-    const { token, method } = this.authenticationDetails;
+    const { method } = this.authenticationDetails;
+    const token = this.token;
 
     if (!(token && method)) {
       throw new Error("Error parsing authentication params");
     }
     const requestBody = this.constructUserAuthenticateParams("POLL");
 
-    const authResponse = await submitAuthChallenge(requestBody, method, token, this.issuerOrigin);
-
-    this.parseResponseErrors(authResponse);
-
-    return authResponse;
+    return await submitAuthChallenge(requestBody, method, token, this.issuerOrigin);
   }
 
   /**
@@ -519,10 +487,10 @@ export class AuthenticationTransaction {
    */
   public async pollForAuthCompletion(): Promise<AuthenticationResponse> {
     // set polling
-    this.authenticationDetails.continuePolling = true;
+    this.continuePolling = true;
     let authResponse: AuthenticatedResponse = {};
 
-    while (this.authenticationDetails.continuePolling) {
+    while (this.continuePolling) {
       authResponse = await this.poll();
       const { status } = authResponse;
 
@@ -537,7 +505,7 @@ export class AuthenticationTransaction {
         }
         // Stop polling, return the api response
         default: {
-          this.authenticationDetails.continuePolling = false;
+          this.continuePolling = false;
           break;
         }
       }
@@ -547,7 +515,7 @@ export class AuthenticationTransaction {
     }
 
     if (authResponse.authenticationCompleted) {
-      this.authenticationDetails.token = authResponse.token;
+      this.token = authResponse.token;
       await this.handleSuccessfulAuthentication();
     }
 
@@ -558,7 +526,8 @@ export class AuthenticationTransaction {
    * Cancels an authentication challenge received from the IDaaS Authentication API.
    */
   public async cancelAuthChallenge() {
-    const { token, method } = this.authenticationDetails;
+    const { method } = this.authenticationDetails;
+    const token = this.token;
 
     if (!(token && method)) {
       throw new Error("error parsing authentication params");
@@ -567,17 +536,8 @@ export class AuthenticationTransaction {
     const requestBody = this.constructUserAuthenticateParams("CANCEL");
 
     // end polling
-    this.authenticationDetails.continuePolling = false;
+    this.continuePolling = false;
     await submitAuthChallenge(requestBody, method, token, this.issuerOrigin);
-  }
-
-  private parseResponseErrors(response: AuthenticatedResponse) {
-    const errorResponse = response as ErrorInfo;
-    const { errorCode, errorMessage } = errorResponse;
-
-    if (errorCode) {
-      throw new Error(errorCode, { cause: errorMessage });
-    }
   }
 
   private shouldPoll = (method: string) => {
@@ -585,14 +545,12 @@ export class AuthenticationTransaction {
   };
 
   public getAuthenticationDetails = (): AuthenticationDetails => {
-    return {
-      ...this.authenticationDetails,
-      ...this.requiredDetails,
-    };
+    return this.authenticationDetails;
   };
 
   private constructUserChallengeParams = (): UserChallengeParameters => {
-    const { method, isSecondFactor, secondFactor, token } = this.authenticationDetails;
+    const { method, secondFactor } = this.authenticationDetails;
+    const token = this.token;
     if (!this.requiredDetails) {
       throw new Error("Jwt params not initialized");
     }
@@ -615,7 +573,7 @@ export class AuthenticationTransaction {
       requestBody.pushMutualChallengeEnabled = this.mutualChallengeEnabled;
     }
 
-    if (isSecondFactor) {
+    if (this.isSecondFactor) {
       if (!(secondFactor && token)) {
         throw new Error("Error parsing authentication params");
       }
@@ -639,7 +597,7 @@ export class AuthenticationTransaction {
     requestType: "POLL" | "CANCEL" | "SUBMIT",
     response?: string,
   ): UserAuthenticateParameters => {
-    const { secondFactor, isSecondFactor, method } = this.authenticationDetails;
+    const { secondFactor, method } = this.authenticationDetails;
     if (!this.requiredDetails) {
       throw new Error("Required details not initialized");
     }
@@ -650,7 +608,7 @@ export class AuthenticationTransaction {
       userId: this.userId,
     };
 
-    if (isSecondFactor) {
+    if (this.isSecondFactor) {
       if (!secondFactor) {
         throw new Error("Error parsing authentication params");
       }
@@ -665,13 +623,15 @@ export class AuthenticationTransaction {
       case "POLL": {
         if (method === "FACE") {
           requestBody.faceResponse = this.faceChallenge?.workflowRunId;
+          // TODO: deprecated
         }
         break;
       }
       case "SUBMIT": {
         requestBody.authRequestKey = this.requiredDetails.authRequestKey;
-        requestBody.response = response;
+        requestBody.response = response ?? undefined;
         requestBody.kbaChallenge = this.kbaChallenge ?? undefined;
+        requestBody.fidoResponse = this.fidoResponse ?? undefined;
         break;
       }
     }
@@ -680,6 +640,7 @@ export class AuthenticationTransaction {
 
   private startWebAuthn = async (optionsJSON: PublicKeyCredentialRequestOptionsJSON, useBrowserAutofill = false) => {
     let allowCredentials = undefined;
+    const abortController = new AbortController();
     if (optionsJSON.allowCredentials?.length !== 0) {
       allowCredentials = optionsJSON.allowCredentials?.map(toPublicKeyCredentialDescriptor);
     }
@@ -708,8 +669,8 @@ export class AuthenticationTransaction {
     // Finalize options
     getOptions.publicKey = publicKey;
     // Set up the ability to cancel this request if the user attempts another
-    // getOptions.signal = WebAuthnAbortService.createNewAbortSignal();
-    // TODO ^
+    getOptions.signal = abortController.signal;
+    // TODO: remove dependency
 
     // Wait for the user to complete assertion
     const credential = (await navigator.credentials.get(getOptions)) as AuthenticationCredential;

@@ -2,6 +2,7 @@ import type { JWTPayload } from "jose";
 import type { IdaasAuthenticationMethod } from "./models/";
 import type {
   AuthenticatedResponse,
+  ErrorInfo,
   UserAuthenticateParameters,
   UserAuthenticateQueryParameters,
   UserAuthenticateQueryResponse,
@@ -155,12 +156,14 @@ export const queryUserAuthOptions = async (
   requestBody: UserAuthenticateQueryParameters,
   baseUrl: string,
 ): Promise<UserAuthenticateQueryResponse> => {
-  const { data } = await userAuthenticatorQueryUsingPost({
+  const { data, error } = await userAuthenticatorQueryUsingPost({
     baseUrl,
     body: { ...requestBody },
-    throwOnError: true,
   });
 
+  if (error) {
+    throw parseResponseError(error);
+  }
   return data;
 };
 
@@ -176,13 +179,15 @@ export const requestAuthChallenge = async (
   authenticator: IdaasAuthenticationMethod,
   baseUrl: string,
 ): Promise<AuthenticatedResponse> => {
-  const { data } = await userChallengeUsingPost({
+  const { data, error } = await userChallengeUsingPost({
     baseUrl,
     body: { ...requestBody },
     path: { authenticator },
-    throwOnError: true,
   });
 
+  if (error) {
+    throw parseResponseError(error);
+  }
   return data;
 };
 
@@ -200,14 +205,16 @@ export const submitAuthChallenge = async (
   authorization: string,
   baseUrl: string,
 ): Promise<AuthenticatedResponse> => {
-  const { data } = await userAuthenticateUsingPost({
+  const { data, error } = await userAuthenticateUsingPost({
     baseUrl,
     headers: { Authorization: authorization },
     body: { ...requestBody },
     path: { authenticator },
-    throwOnError: true,
   });
 
+  if (error) {
+    throw parseResponseError(error);
+  }
   return data;
 };
 
@@ -217,4 +224,8 @@ export const getAuthRequestId = async (endpoint: string) => {
   });
 
   return await response.json();
+};
+
+const parseResponseError = (errorResponse: ErrorInfo) => {
+  return new Error(errorResponse.errorCode, { cause: errorResponse.errorMessage });
 };
