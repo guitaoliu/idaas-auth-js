@@ -1,7 +1,7 @@
 import { afterAll, afterEach, describe, expect, jest, spyOn, test } from "bun:test";
-import type { OidcLoginOptions } from "../../src";
-import type { AccessToken } from "../../src/PersistenceManager";
-import type { TokenResponse } from "../../src/api";
+import type { OidcLoginOptions } from "../../../src";
+import type { AccessToken } from "../../../src/PersistenceManager";
+import type { TokenResponse } from "../../../src/api";
 import {
   NO_DEFAULT_IDAAS_CLIENT,
   SET_DEFAULTS_IDAAS_CLIENT,

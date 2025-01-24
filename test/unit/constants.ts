@@ -1,9 +1,9 @@
 import type { JWTPayload } from "jose";
-import { IdaasClient } from "../src";
-import type { AccessToken, ClientParams, IdToken, TokenParams } from "../src/PersistenceManager";
-import type { OidcConfig, TokenResponse } from "../src/api";
-import type { AuthorizeResponse, OnboardingResponse, SignUpOptions } from "../src/models/models";
-import type { ValidateIdTokenParams, ValidateUserInfoTokenParams } from "../src/utils/jwt";
+import { IdaasClient } from "../../src";
+import type { AccessToken, ClientParams, IdToken, TokenParams } from "../../src/PersistenceManager";
+import type { OidcConfig, TokenResponse } from "../../src/api";
+import type { AuthorizeResponse, OnboardingResponse, SignUpOptions } from "../../src/models";
+import type { ValidateIdTokenParams, ValidateUserInfoTokenParams } from "../../src/utils/jwt";
 
 export const TEST_BASE_URI = "https://testing.com";
 export const TEST_CLIENT_ID = "testingclientid";

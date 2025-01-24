@@ -12,7 +12,9 @@ Get started with a [free trial](https://in.entrust.com/IDaaS/) account today.
 
 ## Installation
 
-TODO
+```sh
+npm i @entrustcorp/idaas-auth-spa
+```
 
 ## Configure Your IDaaS Application
 

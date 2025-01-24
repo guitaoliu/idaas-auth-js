@@ -27,8 +27,10 @@ pipeline {
     stage("🏗️  Build") {
       steps {
         sh "bun install --frozen-lockfile"
-        sh "bun run generate:api"
-        sh "bun run ci"
+        sh "bun run api:generate"
+        sh "bun run build"
+        sh "bun run lint"
+        sh "bun run lint:types"
       }
     }
     stage("🧪  Test") {
@@ -36,7 +38,7 @@ pipeline {
         environment name: "RUN_TESTS", value: "true"
       }
       steps {
-          sh "bun test --bail"
+          sh "bun test"
           sh "bunx playwright install --with-deps"
           sh "bun run test:e2e"
       }

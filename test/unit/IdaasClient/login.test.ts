@@ -1,9 +1,7 @@
 import { afterAll, afterEach, describe, expect, jest, spyOn, test } from "bun:test";
-// biome-ignore lint: needed for spyOn
-import * as browser from "../../src/utils/browser";
-import { formatUrl } from "../../src/utils/format";
-// biome-ignore lint: needed for spyOn
-import * as jwt from "../../src/utils/jwt";
+import * as browser from "../../../src/utils/browser";
+import { formatUrl } from "../../../src/utils/format";
+import * as jwt from "../../../src/utils/jwt";
 import {
   NO_DEFAULT_IDAAS_CLIENT,
   SET_DEFAULTS_IDAAS_CLIENT,

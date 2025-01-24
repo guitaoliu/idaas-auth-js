@@ -1,5 +1,8 @@
 import { IdaasClient } from "../../src";
-import { CLIENT_ID, DEV_SERVER, ISSUER } from "./constants.js";
+
+const CLIENT_ID = process.env.CLIENT_ID as string;
+const DEV_SERVER = process.env.DEV_SERVER as string;
+const ISSUER = process.env.ISSUER as string;
 
 /**
  * Initialize the IDaaS Client
@@ -17,7 +20,7 @@ const idaasClient: IdaasClient = initializeClient();
 
 const updateUI = async () => {
   const isAuthenticated = idaasClient.isAuthenticated();
-  let accessTokens = null;
+  let accessTokens: string | null = null;
   try {
     accessTokens = await idaasClient.getAccessToken();
   } catch {

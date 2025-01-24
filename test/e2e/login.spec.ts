@@ -1,5 +1,9 @@
 import { type Page, expect, test } from "@playwright/test";
-import { CLIENT_ID, DEV_SERVER, ISSUER, PASSWORD, USERNAME } from "./test-app/constants";
+import { config } from "dotenv";
+
+config();
+
+const { CLIENT_ID = "", DEV_SERVER = "", ISSUER = "", PASSWORD = "", USERNAME = "" } = process.env;
 
 const CLIENT_PARAMS_KEY = `entrust.${CLIENT_ID}.clientParams`;
 const ACCESS_TOKENS_KEY = `entrust.${CLIENT_ID}.accessTokens`;

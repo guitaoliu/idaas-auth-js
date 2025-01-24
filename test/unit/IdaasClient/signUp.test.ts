@@ -1,6 +1,5 @@
 import { afterAll, afterEach, describe, expect, jest, spyOn, test } from "bun:test";
-// biome-ignore lint: needed for spyOn
-import * as browser from "../../src/utils/browser";
+import * as browser from "../../../src/utils/browser";
 import {
   NO_DEFAULT_IDAAS_CLIENT,
   TEST_BASE_URI,

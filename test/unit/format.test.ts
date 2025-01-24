@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { formatUrl, sanitizeUri } from "../src/utils/format";
+import { formatUrl, sanitizeUri } from "../../src/utils/format";
 
 describe("formatIssuerUrl", () => {
   const expected = "https://test.com";

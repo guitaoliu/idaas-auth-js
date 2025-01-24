@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { DEV_SERVER, ISSUER } from "./test-app/constants";
+import { config } from "dotenv";
+
+config();
+
+const { DEV_SERVER = "", ISSUER = "" } = process.env;
 
 /**
  * If these tests fail, it is an issue with server initialization, not the SDK

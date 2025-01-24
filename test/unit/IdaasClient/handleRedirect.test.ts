@@ -1,9 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, jest, spyOn, test } from "bun:test";
-import type { ValidatedTokenResponse } from "../../src/IdaasClient";
-// biome-ignore lint: needed for spyOn
-import * as format from "../../src/utils/format";
-// biome-ignore lint: needed for spyOn
-import * as jwt from "../../src/utils/jwt";
+import type { ValidatedTokenResponse } from "../../../src/IdaasClient";
+import * as format from "../../../src/utils/format";
+import * as jwt from "../../../src/utils/jwt";
 import {
   NO_DEFAULT_IDAAS_CLIENT,
   TEST_ACCESS_TOKEN_KEY,

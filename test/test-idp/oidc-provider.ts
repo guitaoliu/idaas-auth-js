@@ -1,6 +1,8 @@
-import type { Configuration } from "oidc-provider";
-import Provider from "oidc-provider";
-import { CLIENT_ID, DEV_SERVER, ISSUER } from "./constants";
+import Provider, { type Configuration } from "oidc-provider";
+
+const { CLIENT_ID = "", DEV_SERVER = "", ISSUER = "" } = process.env;
+
+console.log({ CLIENT_ID, DEV_SERVER, ISSUER });
 
 const providerConfig: Configuration = {
   clients: [
@@ -24,6 +26,7 @@ const providerConfig: Configuration = {
     },
     webMessageResponseMode: {
       enabled: true,
+      ack: "individual-draft-00",
     },
   },
   rotateRefreshToken: true,

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { type AccessToken, PersistenceManager } from "../src/PersistenceManager";
+import { type AccessToken, PersistenceManager } from "../../src/PersistenceManager";
 import {
   TEST_ACCESS_TOKEN_KEY,
   TEST_ACCESS_TOKEN_OBJECT,

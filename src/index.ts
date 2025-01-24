@@ -1,4 +1,5 @@
 export { IdaasClient } from "./IdaasClient";
+
 export type {
   IdaasClientOptions,
   UserClaims,

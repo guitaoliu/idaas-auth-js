@@ -1,29 +1,23 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.5.3/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
   "organizeImports": {
     "enabled": true
-  },
-  "files": {
-    "ignore": ["dist", "src/models/openapi-ts"]
   },
   "formatter": {
     "indentWidth": 2,
     "indentStyle": "space",
-    "lineWidth": 120
+    "lineWidth": 120,
+    "ignore": ["package.json", "authentication.json"]
   },
   "linter": {
     "enabled": true,
     "rules": {
-      "style": {
-        "useNamingConvention": "off"
-      },
-      "performance": {
-        "noBarrelFile": "off"
-      },
-      "all": true,
-      "correctness": {
-        "useExhaustiveDependencies": "off"
-      }
+      "recommended": true
     }
   }
 }
