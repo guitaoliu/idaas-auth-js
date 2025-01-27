@@ -26,7 +26,7 @@ import type {
   UserAuthenticateQueryResponse,
   UserChallengeParameters,
 } from "./models/openapi-ts";
-import { browserSupportPasskey } from "./utils/browser";
+import { browserSupportsPasskey } from "./utils/browser";
 import { base64UrlStringEncode, createRandomString, generateChallengeVerifierPair } from "./utils/crypto";
 import {
   base64URLStringToBuffer,
@@ -111,7 +111,7 @@ export class AuthenticationTransaction {
   }
 
   private async handlePasskeyLogin(): Promise<void> {
-    if (!(await browserSupportPasskey())) {
+    if (!(await browserSupportsPasskey())) {
       throw new Error("This browser does not support passkey");
     }
 

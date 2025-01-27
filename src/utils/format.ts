@@ -1,30 +1,33 @@
 import type { PublicKeyCredentialDescriptorJSON } from "../models";
 
 /**
- * Format string as an https url and remove any trailing /
+ * Format string as an https url
  *
  * Exception: if the URL explicitly begins with http://localhost:<port>
+ *
  * @param initialUrl url string to format
  */
 export const formatUrl = (initialUrl: string): string => {
-  // remove trailing /
-  const finalUrl = initialUrl.endsWith("/") ? initialUrl.slice(0, -1) : initialUrl;
-  // Return if localhost url
-  if (finalUrl.startsWith("http://localhost:")) {
-    return finalUrl;
+  const input = initialUrl.includes("://") ? initialUrl : `https://${initialUrl}`;
+
+  const url = new URL(input);
+
+  if (url.hostname === "localhost") {
+    return url.toString();
   }
-  // prepend https:// if it's not already there
-  return finalUrl.startsWith("https://") ? finalUrl : `https://${finalUrl}`;
+
+  url.protocol = "https:";
+
+  return url.toString();
 };
 
 /**
  * Calculate the expiry time of a token
  * @param expiresIn the time in milliseconds until expiry
- * @param authTime the time at which the user authenticated to receive a token
+ * @param authTime the time in seconds since epoch at which the user authenticated to receive a token
  */
 export const calculateEpochExpiry = (expiresIn: string, authTime = Math.floor(Date.now() / 1000).toString()) => {
-  const authenticatedAt = Number.parseInt(authTime);
-  return Number.parseInt(expiresIn) + authenticatedAt;
+  return Number.parseInt(expiresIn) + Number.parseInt(authTime);
 };
 
 /**
@@ -34,6 +37,7 @@ export const calculateEpochExpiry = (expiresIn: string, authTime = Math.floor(Da
 export const sanitizeUri = (redirectUri: string): string => {
   const sanitizedUrl = new URL(redirectUri);
   sanitizedUrl.search = "";
+
   return sanitizedUrl.toString();
 };
 

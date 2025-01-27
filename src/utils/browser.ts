@@ -123,6 +123,6 @@ export const listenToOnboardingPopup = (popup: Window, url: string) => {
   });
 };
 
-export const browserSupportPasskey = async (): Promise<boolean> => {
+export const browserSupportsPasskey = async (): Promise<boolean> => {
   return window.PublicKeyCredential && (await PublicKeyCredential.isConditionalMediationAvailable());
 };
