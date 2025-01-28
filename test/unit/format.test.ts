@@ -2,21 +2,25 @@ import { afterAll, beforeAll, describe, expect, it, setSystemTime } from "bun:te
 import { calculateEpochExpiry, formatUrl, sanitizeUri } from "../../src/utils/format";
 
 describe("formatUrl", () => {
-  const expected = "https://test.com/";
+  const expected = "https://test.com";
 
   it("should prepend 'https://' if missing", () => {
-    const url = "test.com";
-    expect(formatUrl(url)).toBe(expected);
+    expect(formatUrl("test.com")).toBe(expected);
+  });
+
+  it("should remove trailing slash", () => {
+    expect(formatUrl("https://test.com/")).toBe(expected);
   });
 
   it("should allow http:// for localhost url", () => {
-    const localhost = "http://localhost:3000/";
-    expect(formatUrl(localhost)).toBe(localhost);
+    expect(formatUrl("http://localhost:3000/")).toBe("http://localhost:3000");
+    expect(formatUrl("https://localhost:3000/")).toBe("https://localhost:3000");
   });
 
   it("should set protocol to HTTPS", () => {
-    expect(formatUrl("http://test.com")).toBe("https://test.com/");
-    expect(formatUrl("ftp://test.com")).toBe("https://test.com/");
+    expect(formatUrl("http://test.com")).toBe("https://test.com");
+    expect(formatUrl("ftp://test.com")).toBe("https://test.com");
+    expect(formatUrl("ftp://localhost")).toBe("https://localhost");
   });
 });
 
@@ -43,7 +47,7 @@ describe("calculateEpochExpiry", () => {
 });
 
 describe("sanitizeUri", () => {
-  it("removes trailing '?'", () => {
+  it("removes query parameters from URL", () => {
     const url = "https://test.com/?foo=bar";
     expect(sanitizeUri(url)).toBe("https://test.com/");
   });

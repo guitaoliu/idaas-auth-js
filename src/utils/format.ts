@@ -1,24 +1,30 @@
 import type { PublicKeyCredentialDescriptorJSON } from "../models";
 
 /**
- * Format string as an https url
+ * Format string as an https url and remove any trailing slash
  *
  * Exception: if the URL explicitly begins with http://localhost:<port>
  *
  * @param initialUrl url string to format
  */
 export const formatUrl = (initialUrl: string): string => {
+  // make sure there's a protocol
   const input = initialUrl.includes("://") ? initialUrl : `https://${initialUrl}`;
 
+  // parse the URL. Will throw if URL is invalid
   const url = new URL(input);
 
-  if (url.hostname === "localhost") {
-    return url.toString();
+  // Validate the protocol to ensure it's HTTPS or HTTP for localhost
+  if (url.protocol !== "https:") {
+    if (url.hostname !== "localhost" || url.protocol !== "http:") {
+      url.protocol = "https:";
+    }
   }
 
-  url.protocol = "https:";
+  // Remove the trailing slash
+  const finalUrl = url.toString();
 
-  return url.toString();
+  return finalUrl.endsWith("/") ? finalUrl.slice(0, -1) : finalUrl;
 };
 
 /**
