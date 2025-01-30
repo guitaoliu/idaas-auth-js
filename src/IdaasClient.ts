@@ -19,11 +19,9 @@ import type {
   IdaasClientOptions,
   LogoutOptions,
   OidcLoginOptions,
-  OnboardingResponse,
-  SignUpOptions,
   UserClaims,
 } from "./models";
-import { listenToAuthorizePopup, listenToOnboardingPopup, openPopup } from "./utils/browser";
+import { listenToAuthorizePopup, openPopup } from "./utils/browser";
 import { base64UrlStringEncode, createRandomString, generateChallengeVerifierPair } from "./utils/crypto";
 import { calculateEpochExpiry, formatUrl, sanitizeUri } from "./utils/format";
 import { readAccessToken, validateIdToken, validateUserInfoToken } from "./utils/jwt";
@@ -55,34 +53,6 @@ export class IdaasClient {
     this.issuerUrl = formatUrl(issuerUrl);
     this.persistenceManager = new PersistenceManager(clientId);
     this.clientId = clientId;
-  }
-
-  public async signUp({ redirectUri, popup = false }: SignUpOptions = {}) {
-    const finalRedirectUri = redirectUri ?? sanitizeUri(window.location.href);
-    const url = this.generateSignUpUrl({ redirectUri: finalRedirectUri, popup });
-
-    if (popup) {
-      const testPopupWindow = openPopup("");
-      const { response_modes_supported } = await this.getConfig();
-      const popupSupported = response_modes_supported?.includes("web_message");
-
-      if (!popupSupported) {
-        testPopupWindow.close();
-        throw new Error("Attempted to use popup but web_message is not supported by OpenID provider.");
-      }
-
-      const popupWindow = openPopup(url);
-      const onboardingResponse = await listenToOnboardingPopup(popupWindow, url);
-
-      // redirect only if the redirectUri is not the current uri
-      if (formatUrl(window.location.href) !== formatUrl(finalRedirectUri)) {
-        window.location.href = finalRedirectUri;
-      }
-      return onboardingResponse.userId;
-    }
-    window.location.href = url;
-
-    return null;
   }
 
   /**
@@ -197,10 +167,11 @@ export class IdaasClient {
    * Handle the callback to the login redirectUri post-authorize and pass the received code to the token endpoint to get
    * the access token, ID token, and optionally refresh token (optional). Additionally, validate the ID token claims.
    */
-  public async handleRedirect(): Promise<OnboardingResponse | null> {
-    const { authorizeResponse, signUpResponse } = this.parseRedirect();
+  public async handleRedirect(): Promise<null> {
+    const { authorizeResponse } = this.parseRedirect();
+
     // The current url is not an authorized callback url
-    if (!(authorizeResponse || signUpResponse)) {
+    if (!authorizeResponse) {
       return null;
     }
 
@@ -223,7 +194,7 @@ export class IdaasClient {
       return null;
     }
 
-    return signUpResponse;
+    return null;
   }
 
   /**
@@ -458,24 +429,16 @@ export class IdaasClient {
     const searchParams = url.searchParams;
 
     if (searchParams.toString() === "") {
-      return { signUpResponse: null, authorizeResponse: null };
+      return {
+        authorizeResponse: null,
+      };
     }
 
     const authorizeResponse = this.parseLoginRedirect(searchParams);
-    const signUpResponse = this.parseSignUpRedirect(searchParams);
 
-    return { signUpResponse, authorizeResponse };
-  }
-
-  private parseSignUpRedirect(searchParams: URLSearchParams): OnboardingResponse | null {
-    const error = searchParams.get("error");
-    const userId = searchParams.get("userId");
-
-    if (error) {
-      throw new Error(error);
-    }
-
-    return userId || error ? { userId, error } : null;
+    return {
+      authorizeResponse,
+    };
   }
 
   private parseLoginRedirect(searchParams: URLSearchParams): AuthorizeResponse | null {
@@ -626,19 +589,6 @@ export class IdaasClient {
     return { url: url.toString(), nonce, state, codeVerifier };
   }
 
-  private generateSignUpUrl({ redirectUri = sanitizeUri(window.location.href), popup }: SignUpOptions): string {
-    const issuerOrigin = this.getIssuerOrigin();
-    const signUpUrl = new URL(issuerOrigin);
-
-    signUpUrl.pathname = "/api/web/user/onboard";
-    signUpUrl.searchParams.append("redirect_uri", redirectUri);
-
-    if (popup) {
-      signUpUrl.searchParams.append("response_mode", "web_message");
-    }
-    return signUpUrl.toString();
-  }
-
   /**
    * Generate the endsession url with the required query params to log out the user from the OpenID Provider
    */
@@ -655,10 +605,6 @@ export class IdaasClient {
 
   private async getConfig(): Promise<OidcConfig> {
     return this.config ? this.config : await fetchOpenidConfiguration(this.issuerUrl);
-  }
-
-  private getIssuerOrigin(): string {
-    return new URL(this.issuerUrl).origin;
   }
 
   private initializeAuthenticationTransaction = async (options: AuthenticationRequestParams) => {

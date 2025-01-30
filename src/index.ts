@@ -6,7 +6,6 @@ export type {
   OidcLoginOptions,
   LogoutOptions,
   GetAccessTokenOptions,
-  SignUpOptions,
   AuthenticationResponse,
   AuthenticationRequestParams,
   AuthenticationSubmissionParams,

@@ -2,7 +2,7 @@ import type { JWTPayload } from "jose";
 import { IdaasClient } from "../../src";
 import type { AccessToken, ClientParams, IdToken, TokenParams } from "../../src/PersistenceManager";
 import type { OidcConfig, TokenResponse } from "../../src/api";
-import type { AuthorizeResponse, OnboardingResponse, SignUpOptions } from "../../src/models";
+import type { AuthorizeResponse } from "../../src/models";
 import type { ValidateIdTokenParams, ValidateUserInfoTokenParams } from "../../src/utils/jwt";
 
 export const TEST_BASE_URI = "https://testing.com";
@@ -41,11 +41,6 @@ export const SET_DEFAULTS_IDAAS_CLIENT = new IdaasClient({
   globalScope: TEST_DIFFERENT_SCOPE,
   globalAudience: TEST_DIFFERENT_AUDIENCE,
 });
-
-export const TEST_SIGN_UP_OPTIONS: SignUpOptions = {
-  redirectUri: TEST_REDIRECT_URI,
-  popup: false,
-};
 
 export const TEST_TOKEN_PARAMS: TokenParams = {
   scope: TEST_SCOPE,
@@ -124,11 +119,6 @@ export const TEST_AUTH_RESPONSE: AuthorizeResponse = {
   state: TEST_STATE,
   error: null,
   error_description: null,
-};
-
-export const TEST_ONBOARDING_RESPONSE: OnboardingResponse = {
-  userId: TEST_USER_ID,
-  error: null,
 };
 
 export const TEST_TOKEN_RESPONSE: TokenResponse = {

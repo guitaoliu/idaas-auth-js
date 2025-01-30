@@ -11,7 +11,6 @@ import {
   TEST_CODE,
   TEST_ID_TOKEN_KEY,
   TEST_ID_TOKEN_OBJECT,
-  TEST_ONBOARDING_RESPONSE,
   TEST_STATE,
   TEST_TOKEN_PARAMS,
   TEST_USER_ID,
@@ -26,8 +25,6 @@ describe("IdaasClient.handleRedirect", () => {
   // @ts-ignore private method
   const spyOnParseLoginRedirect = spyOn(NO_DEFAULT_IDAAS_CLIENT, "parseLoginRedirect");
   // @ts-ignore private method
-  const spyOnParseSignUpRedirect = spyOn(NO_DEFAULT_IDAAS_CLIENT, "parseSignUpRedirect");
-  // @ts-ignore private method
   const spyOnRequestAndValidateTokens = spyOn(NO_DEFAULT_IDAAS_CLIENT, "requestAndValidateTokens");
   // @ts-ignore private method
   const spyOnValidateAuthorizeResponse = spyOn(NO_DEFAULT_IDAAS_CLIENT, "validateAuthorizeResponse");
@@ -39,7 +36,6 @@ describe("IdaasClient.handleRedirect", () => {
     return { decodedJwt: TEST_ID_TOKEN_OBJECT.decoded, idToken: TEST_ID_TOKEN_OBJECT.encoded };
   });
   const loginSuccessUrl = `${TEST_BASE_URI}?code=${TEST_CODE}&state=${TEST_STATE}`;
-  const onboardingSuccessUrl = `${TEST_BASE_URI}?userId=${TEST_USER_ID}`;
   const startLocation = window.location.href;
 
   afterAll(() => {
@@ -67,17 +63,11 @@ describe("IdaasClient.handleRedirect", () => {
       expect(spyOnParseLoginRedirect).toBeCalled();
     });
 
-    test("calls `parseSignUpRedirect`", async () => {
-      await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
-      expect(spyOnParseSignUpRedirect).toBeCalled();
-    });
-
     test("returns the result of both parses", async () => {
       await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
-      const signUpResponse = spyOnParseSignUpRedirect.mock.results[0].value;
       const authorizeResponse = spyOnParseLoginRedirect.mock.results[0].value;
 
-      expect(spyOnParseRedirect.mock.results[0].value).toStrictEqual({ signUpResponse, authorizeResponse });
+      expect(spyOnParseRedirect.mock.results[0].value).toStrictEqual({ authorizeResponse });
     });
 
     test("returns early if there are no search params in url", async () => {
@@ -85,9 +75,8 @@ describe("IdaasClient.handleRedirect", () => {
 
       await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
       expect(spyOnParseLoginRedirect).not.toBeCalled();
-      expect(spyOnParseSignUpRedirect).not.toBeCalled();
 
-      expect(spyOnParseRedirect.mock.results[0].value).toStrictEqual({ signUpResponse: null, authorizeResponse: null });
+      expect(spyOnParseRedirect.mock.results[0].value).toStrictEqual({ authorizeResponse: null });
     });
   });
 
@@ -115,24 +104,7 @@ describe("IdaasClient.handleRedirect", () => {
     });
   });
 
-  describe("parseSignUpRedirect", () => {
-    test("throws error if error in search params", () => {
-      window.location.href = `${TEST_BASE_URI}?error=error`;
-      expect(async () => {
-        await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
-      }).toThrowError();
-    });
-
-    test("returns the search params found in url", async () => {
-      window.location.href = onboardingSuccessUrl;
-      storeData({ clientParams: true, tokenParams: true });
-      await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
-
-      expect(spyOnParseSignUpRedirect.mock.results[0].value).toStrictEqual(TEST_ONBOARDING_RESPONSE);
-    });
-  });
-
-  test("returns early if both authorizeResponse and onboardingResponse are falsy (null)", async () => {
+  test("returns early if authorizeResponse is falsy (null)", async () => {
     window.location.href = TEST_BASE_URI;
     storeData({ tokenParams: true, clientParams: true });
     const result = await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
@@ -334,14 +306,6 @@ describe("IdaasClient.handleRedirect", () => {
         expect(decodedIdToken).toStrictEqual(storedToken.decoded);
         expect(encodedIdToken).toStrictEqual(storedToken.encoded);
       });
-    });
-  });
-  describe("onboarding event", () => {
-    test("returns the sign up response", async () => {
-      window.location.href = onboardingSuccessUrl;
-      const result = await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
-
-      expect(spyOnParseSignUpRedirect.mock.results[0].value).toStrictEqual(result);
     });
   });
 });
