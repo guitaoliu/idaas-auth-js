@@ -1,6 +1,5 @@
 import { type JWTPayload, decodeJwt } from "jose";
 import { AuthenticationTransaction } from "./AuthenticationTransaction";
-import { type AccessToken, PersistenceManager } from "./PersistenceManager";
 import {
   type AccessTokenRequest,
   type OidcConfig,
@@ -21,6 +20,7 @@ import type {
   OidcLoginOptions,
   UserClaims,
 } from "./models";
+import { type AccessToken, StorageManager } from "./storage/StorageManager";
 import { listenToAuthorizePopup, openPopup } from "./utils/browser";
 import { base64UrlStringEncode, createRandomString, generateChallengeVerifierPair } from "./utils/crypto";
 import { calculateEpochExpiry, formatUrl, sanitizeUri } from "./utils/format";
@@ -36,7 +36,7 @@ export interface ValidatedTokenResponse {
 }
 
 export class IdaasClient {
-  private readonly persistenceManager: PersistenceManager;
+  private readonly storageManager: StorageManager;
   private readonly issuerUrl: string;
   private readonly clientId: string;
   private readonly globalScope: string;
@@ -46,12 +46,19 @@ export class IdaasClient {
   private authenticationTransaction?: AuthenticationTransaction;
   private config?: OidcConfig;
 
-  constructor({ issuerUrl, clientId, globalAudience, globalScope, globalUseRefreshToken }: IdaasClientOptions) {
+  constructor({
+    issuerUrl,
+    clientId,
+    globalAudience,
+    globalScope,
+    globalUseRefreshToken,
+    storageType = "memory",
+  }: IdaasClientOptions) {
     this.globalAudience = globalAudience;
     this.globalScope = globalScope ?? "openid profile email";
     this.globalUseRefreshToken = globalUseRefreshToken ?? false;
     this.issuerUrl = formatUrl(issuerUrl);
-    this.persistenceManager = new PersistenceManager(clientId);
+    this.storageManager = new StorageManager(clientId, storageType);
     this.clientId = clientId;
   }
 
@@ -153,7 +160,7 @@ export class IdaasClient {
       maxAge,
     );
 
-    this.persistenceManager.saveClientParams({
+    this.storageManager.saveClientParams({
       nonce,
       state,
       codeVerifier,
@@ -176,7 +183,7 @@ export class IdaasClient {
     }
 
     if (authorizeResponse) {
-      const clientParams = this.persistenceManager.getClientParams();
+      const clientParams = this.storageManager.getClientParams();
       if (!clientParams) {
         throw new Error("Failed to recover IDaaS client state from local storage");
       }
@@ -202,7 +209,7 @@ export class IdaasClient {
    * @returns returns the decodedIdToken containing the user info.
    */
   public getIdTokenClaims(): UserClaims | null {
-    const idToken = this.persistenceManager.getIdToken();
+    const idToken = this.storageManager.getIdToken();
     if (!idToken?.decoded) {
       return null;
     }
@@ -211,7 +218,7 @@ export class IdaasClient {
   }
 
   public isAuthenticated(): boolean {
-    return !!this.persistenceManager.getIdToken();
+    return !!this.storageManager.getIdToken();
   }
 
   /**
@@ -223,7 +230,7 @@ export class IdaasClient {
       return;
     }
 
-    this.persistenceManager.remove();
+    this.storageManager.remove();
 
     window.location.href = await this.generateLogoutUrl(redirectUri);
   }
@@ -232,7 +239,7 @@ export class IdaasClient {
    * Removes tokens from storage that have surpassed their max_age, and tokens that are expired and not refreshable.
    */
   private removeUnusableTokens = (): void => {
-    const tokens = this.persistenceManager.getAccessTokens();
+    const tokens = this.storageManager.getAccessTokens();
     if (!tokens) {
       return;
     }
@@ -243,13 +250,13 @@ export class IdaasClient {
     for (const token of tokens) {
       if (token.maxAgeExpiry) {
         if (now > token.maxAgeExpiry - buffer) {
-          this.persistenceManager.removeAccessToken(token);
+          this.storageManager.removeAccessToken(token);
         }
       }
 
       if (now > token.expiresAt - buffer) {
         if (!token.refreshToken) {
-          this.persistenceManager.removeAccessToken(token);
+          this.storageManager.removeAccessToken(token);
         }
       }
     }
@@ -266,7 +273,7 @@ export class IdaasClient {
   }: GetAccessTokenOptions = {}): Promise<string | null> {
     // 1. Remove tokens that are no longer valid
     this.removeUnusableTokens();
-    let accessTokens = this.persistenceManager.getAccessTokens();
+    let accessTokens = this.storageManager.getAccessTokens();
     const requestedScopes = scope.split(" ");
     const now = Date.now();
     // buffer (in seconds) to refresh/delete early, ensures an expired token is not returned
@@ -333,8 +340,8 @@ export class IdaasClient {
           acr,
         };
 
-        this.persistenceManager.removeAccessToken(requestedToken);
-        this.persistenceManager.saveAccessToken(newAccessToken);
+        this.storageManager.removeAccessToken(requestedToken);
+        this.storageManager.saveAccessToken(newAccessToken);
         return newEncodedAccessToken;
       }
     }
@@ -355,7 +362,7 @@ export class IdaasClient {
     const { refresh_token, access_token, expires_in } = tokenResponse;
     const authTime = readAccessToken(access_token)?.auth_time;
     const expiresAt = calculateEpochExpiry(expires_in, authTime);
-    const tokenParams = this.persistenceManager.getTokenParams();
+    const tokenParams = this.storageManager.getTokenParams();
 
     if (!tokenParams) {
       throw new Error("No token params stored, unable to parse");
@@ -364,7 +371,7 @@ export class IdaasClient {
     const { audience, scope, maxAge } = tokenParams;
     const maxAgeExpiry = maxAge ? calculateEpochExpiry(maxAge.toString(), authTime) : undefined;
 
-    this.persistenceManager.removeTokenParams();
+    this.storageManager.removeTokenParams();
 
     const token = readAccessToken(access_token);
     const acr = token?.acr ?? undefined;
@@ -379,8 +386,8 @@ export class IdaasClient {
       acr,
     };
 
-    this.persistenceManager.saveIdToken({ encoded: encodedIdToken, decoded: decodedIdToken });
-    this.persistenceManager.saveAccessToken(newAccessToken);
+    this.storageManager.saveIdToken({ encoded: encodedIdToken, decoded: decodedIdToken });
+    this.storageManager.saveAccessToken(newAccessToken);
   }
 
   /**
@@ -416,7 +423,7 @@ export class IdaasClient {
     }
 
     // 3. Finally, validate that the sub claim in the UserInfo response exactly matches the sub claim in the ID token
-    const idToken = this.persistenceManager.getIdToken();
+    const idToken = this.storageManager.getIdToken();
     if (idToken?.decoded.sub !== claims.sub) {
       return null;
     }
@@ -576,9 +583,9 @@ export class IdaasClient {
 
     if (maxAge >= 0) {
       url.searchParams.append("max_age", maxAge.toString());
-      this.persistenceManager.saveTokenParams({ audience, scope: usedScope, maxAge });
+      this.storageManager.saveTokenParams({ audience, scope: usedScope, maxAge });
     } else {
-      this.persistenceManager.saveTokenParams({ audience, scope: usedScope });
+      this.storageManager.saveTokenParams({ audience, scope: usedScope });
     }
 
     if (acrValues.length > 0) {
@@ -712,8 +719,8 @@ export class IdaasClient {
     }
 
     // Saving tokens
-    this.persistenceManager.saveIdToken({ encoded: idToken, decoded: decodeJwt(idToken) });
-    this.persistenceManager.saveAccessToken({
+    this.storageManager.saveIdToken({ encoded: idToken, decoded: decodeJwt(idToken) });
+    this.storageManager.saveAccessToken({
       accessToken,
       expiresAt,
       scope,

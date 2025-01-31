@@ -13,6 +13,7 @@ const initializeClient = () => {
   return new IdaasClient({
     issuerUrl: ISSUER,
     clientId: CLIENT_ID,
+    storageType: "localstorage",
   });
 };
 

@@ -282,7 +282,7 @@ describe("IdaasClient.handleRedirect", () => {
 
         await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
         // @ts-ignore accessing private var
-        const storedToken = NO_DEFAULT_IDAAS_CLIENT.persistenceManager.getAccessTokens()[0];
+        const storedToken = NO_DEFAULT_IDAAS_CLIENT.storageManager.getAccessTokens()[0];
         const validatedTokenResponse = spyOnParseAndSaveTokenResponse.mock.calls[0][0] as ValidatedTokenResponse;
         const { tokenResponse } = validatedTokenResponse;
 
@@ -299,7 +299,7 @@ describe("IdaasClient.handleRedirect", () => {
 
         await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
         // @ts-ignore accessing private var
-        const storedToken = NO_DEFAULT_IDAAS_CLIENT.persistenceManager.getIdToken();
+        const storedToken = NO_DEFAULT_IDAAS_CLIENT.storageManager.getIdToken();
         const validatedTokenResponse = spyOnParseAndSaveTokenResponse.mock.calls[0][0] as ValidatedTokenResponse;
         const { decodedIdToken, encodedIdToken } = validatedTokenResponse;
 

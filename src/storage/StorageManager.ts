@@ -1,4 +1,7 @@
 import type { JWTPayload } from "jose";
+import { LocalStorageStore } from "./LocalStorageStore";
+import { InMemoryStore } from "./MemoryStore";
+import type { IStore } from "./shared";
 
 /**
  * The parameters that are created during the creation of the authorization URL.
@@ -49,7 +52,7 @@ export interface AccessToken {
   acr?: string;
 }
 
-export class PersistenceManager {
+export class StorageManager {
   /**
    * @clientParamsStorageKey stores the params generated during the creation of the authorization url.
    * @accessTokensStorageKey stores all access tokens as an array of access tokens.
@@ -60,12 +63,14 @@ export class PersistenceManager {
   private readonly accessTokenStorageKey: string;
   private readonly idTokenStorageKey: string;
   private readonly tokenParamsStorageKey: string;
+  private readonly storage: IStore;
 
-  constructor(clientId: string) {
+  constructor(clientId: string, storageType: "memory" | "localstorage") {
     this.clientParamsStorageKey = `entrust.${clientId}.clientParams`;
     this.accessTokenStorageKey = `entrust.${clientId}.accessTokens`;
     this.idTokenStorageKey = `entrust.${clientId}.idToken`;
     this.tokenParamsStorageKey = `entrust.${clientId}.tokenParams`;
+    this.storage = storageType === "memory" ? new InMemoryStore() : new LocalStorageStore();
   }
   /**
    * Saves values in local storage that are required for the OIDC auth flow.
@@ -73,7 +78,7 @@ export class PersistenceManager {
    * @param storageKey The key used to store the data.
    */
   private save(storageKey: string, data: string) {
-    localStorage.setItem(storageKey, data);
+    this.storage.save(storageKey, data);
   }
 
   /**
@@ -82,7 +87,7 @@ export class PersistenceManager {
    */
   public saveClientParams(data: ClientParams) {
     const stringifiedData = JSON.stringify(data);
-    this.save(this.clientParamsStorageKey, stringifiedData);
+    this.storage.save(this.clientParamsStorageKey, stringifiedData);
   }
 
   /**
@@ -91,7 +96,7 @@ export class PersistenceManager {
    */
   public saveIdToken(data: IdToken) {
     const stringifiedData = JSON.stringify(data);
-    this.save(this.idTokenStorageKey, stringifiedData);
+    this.storage.save(this.idTokenStorageKey, stringifiedData);
   }
 
   /**
@@ -146,7 +151,7 @@ export class PersistenceManager {
    * Clears the stored token params.
    */
   public removeTokenParams() {
-    localStorage.removeItem(this.tokenParamsStorageKey);
+    this.storage.delete(this.tokenParamsStorageKey);
   }
 
   /**
@@ -154,11 +159,11 @@ export class PersistenceManager {
    * @param storageKey The type of data to retrieve from local storage.
    * @returns The parsed data or undefined if there is no key.
    */
-  private get(storageKey: string) {
-    const data = localStorage.getItem(storageKey);
+  private get<T>(storageKey: string): T | undefined {
+    const data = this.storage.get(storageKey);
 
     if (data) {
-      return JSON.parse(data);
+      return JSON.parse(data) as T;
     }
     return undefined;
   }
@@ -199,9 +204,9 @@ export class PersistenceManager {
    * Remove the stored data in local storage essentially logging the user out.
    */
   public remove() {
-    localStorage.removeItem(this.clientParamsStorageKey);
-    localStorage.removeItem(this.accessTokenStorageKey);
-    localStorage.removeItem(this.idTokenStorageKey);
-    localStorage.removeItem(this.tokenParamsStorageKey);
+    this.storage.delete(this.clientParamsStorageKey);
+    this.storage.delete(this.accessTokenStorageKey);
+    this.storage.delete(this.idTokenStorageKey);
+    this.storage.delete(this.tokenParamsStorageKey);
   }
 }

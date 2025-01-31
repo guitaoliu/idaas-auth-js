@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { type AccessToken, PersistenceManager } from "../../src/PersistenceManager";
+import { type AccessToken, StorageManager } from "../../src/storage/StorageManager";
 import {
   TEST_ACCESS_TOKEN_KEY,
   TEST_ACCESS_TOKEN_OBJECT,
@@ -12,8 +12,8 @@ import {
   TEST_TOKEN_PARAMS_KEY,
 } from "./constants";
 
-describe("PersistenceManager", () => {
-  const persistenceManager = new PersistenceManager(TEST_CLIENT_ID);
+describe("StorageManager", () => {
+  const storageManager = new StorageManager(TEST_CLIENT_ID, "localstorage");
 
   afterEach(() => {
     localStorage.clear();
@@ -22,7 +22,7 @@ describe("PersistenceManager", () => {
   describe("access token storage", () => {
     describe("getAccessToken", () => {
       test("returns undefined if no tokens stored", () => {
-        const result = persistenceManager.getAccessTokens();
+        const result = storageManager.getAccessTokens();
         expect(result).toBeUndefined();
       });
 
@@ -30,7 +30,7 @@ describe("PersistenceManager", () => {
         const value = [TEST_ACCESS_TOKEN_OBJECT];
         localStorage.setItem(TEST_ACCESS_TOKEN_KEY, JSON.stringify(value));
 
-        const result = persistenceManager.getAccessTokens();
+        const result = storageManager.getAccessTokens();
         expect(result).toStrictEqual(value);
       });
 
@@ -38,7 +38,7 @@ describe("PersistenceManager", () => {
         const value = new Array(3).fill(TEST_ACCESS_TOKEN_OBJECT);
         localStorage.setItem(TEST_ACCESS_TOKEN_KEY, JSON.stringify(value));
 
-        const result = persistenceManager.getAccessTokens();
+        const result = storageManager.getAccessTokens();
         expect(result).toStrictEqual(value);
       });
     });
@@ -49,7 +49,7 @@ describe("PersistenceManager", () => {
         localStorage.setItem(TEST_ACCESS_TOKEN_KEY, JSON.stringify(value));
 
         expect(() => {
-          persistenceManager.removeAccessToken(TEST_ACCESS_TOKEN_OBJECT);
+          storageManager.removeAccessToken(TEST_ACCESS_TOKEN_OBJECT);
         }).not.toThrowError();
       });
 
@@ -57,7 +57,7 @@ describe("PersistenceManager", () => {
         const value = [TEST_ACCESS_TOKEN_OBJECT];
         localStorage.setItem(TEST_ACCESS_TOKEN_KEY, JSON.stringify(value));
 
-        persistenceManager.removeAccessToken(TEST_ACCESS_TOKEN_OBJECT);
+        storageManager.removeAccessToken(TEST_ACCESS_TOKEN_OBJECT);
         expect(localStorage.getItem(TEST_ACCESS_TOKEN_KEY)).toBe(JSON.stringify([]));
       });
 
@@ -67,14 +67,14 @@ describe("PersistenceManager", () => {
         const value = [token1, token2];
         localStorage.setItem(TEST_ACCESS_TOKEN_KEY, JSON.stringify(value));
 
-        persistenceManager.removeAccessToken(token2);
+        storageManager.removeAccessToken(token2);
         expect(localStorage.getItem(TEST_ACCESS_TOKEN_KEY)).toStrictEqual(JSON.stringify([token1]));
       });
     });
 
     describe("saveAccessToken", () => {
       test("stores access token as an array if none already stored", () => {
-        persistenceManager.saveAccessToken(TEST_ACCESS_TOKEN_OBJECT);
+        storageManager.saveAccessToken(TEST_ACCESS_TOKEN_OBJECT);
         expect(localStorage.getItem(TEST_ACCESS_TOKEN_KEY)).toStrictEqual(JSON.stringify([TEST_ACCESS_TOKEN_OBJECT]));
       });
 
@@ -82,10 +82,10 @@ describe("PersistenceManager", () => {
         const token1: AccessToken = { ...TEST_ACCESS_TOKEN_OBJECT, scope: "1" };
         const token2: AccessToken = { ...TEST_ACCESS_TOKEN_OBJECT, scope: "2" };
 
-        persistenceManager.saveAccessToken(token1);
+        storageManager.saveAccessToken(token1);
         expect(JSON.parse(localStorage.getItem(TEST_ACCESS_TOKEN_KEY) ?? "").length).toBe(1);
 
-        persistenceManager.saveAccessToken(token2);
+        storageManager.saveAccessToken(token2);
         expect(JSON.parse(localStorage.getItem(TEST_ACCESS_TOKEN_KEY) ?? "").length).toBe(2);
       });
 
@@ -93,10 +93,10 @@ describe("PersistenceManager", () => {
         const token1: AccessToken = { ...TEST_ACCESS_TOKEN_OBJECT, audience: "1" };
         const token2: AccessToken = { ...TEST_ACCESS_TOKEN_OBJECT, audience: "2" };
 
-        persistenceManager.saveAccessToken(token1);
+        storageManager.saveAccessToken(token1);
         expect(JSON.parse(localStorage.getItem(TEST_ACCESS_TOKEN_KEY) ?? "").length).toBe(1);
 
-        persistenceManager.saveAccessToken(token2);
+        storageManager.saveAccessToken(token2);
         expect(JSON.parse(localStorage.getItem(TEST_ACCESS_TOKEN_KEY) ?? "").length).toBe(2);
       });
     });
@@ -105,32 +105,32 @@ describe("PersistenceManager", () => {
   describe("token param storage", () => {
     describe("getTokenParams", () => {
       test("returns undefined if no token params stored", () => {
-        expect(persistenceManager.getTokenParams()).toBeUndefined();
+        expect(storageManager.getTokenParams()).toBeUndefined();
       });
 
       test("returns the stored token params", () => {
         localStorage.setItem(TEST_TOKEN_PARAMS_KEY, JSON.stringify(TEST_TOKEN_PARAMS));
-        expect(persistenceManager.getTokenParams()).toStrictEqual(TEST_TOKEN_PARAMS);
+        expect(storageManager.getTokenParams()).toStrictEqual(TEST_TOKEN_PARAMS);
       });
     });
 
     describe("removeTokenParams", () => {
       test("does nothing if no token params stored", () => {
         expect(() => {
-          persistenceManager.removeTokenParams();
+          storageManager.removeTokenParams();
         }).not.toThrowError();
       });
 
       test("removes the stored token params", () => {
         localStorage.setItem(TEST_TOKEN_PARAMS_KEY, JSON.stringify(TEST_TOKEN_PARAMS));
-        persistenceManager.removeTokenParams();
+        storageManager.removeTokenParams();
         expect(localStorage.getItem(TEST_TOKEN_PARAMS_KEY)).toBeNull();
       });
     });
 
     describe("saveTokenParams", () => {
       test("stores the given token params", () => {
-        persistenceManager.saveTokenParams(TEST_TOKEN_PARAMS);
+        storageManager.saveTokenParams(TEST_TOKEN_PARAMS);
         expect(localStorage.getItem(TEST_TOKEN_PARAMS_KEY)).toStrictEqual(JSON.stringify(TEST_TOKEN_PARAMS));
       });
     });
@@ -138,19 +138,19 @@ describe("PersistenceManager", () => {
   describe("client param storage", () => {
     describe("getClientParams", () => {
       test("returns undefined if no client params stored", () => {
-        expect(persistenceManager.getClientParams()).toBeUndefined();
+        expect(storageManager.getClientParams()).toBeUndefined();
       });
 
       test("returns the stored client params", () => {
         localStorage.setItem(TEST_CLIENT_PARAMS_KEY, JSON.stringify(TEST_CLIENT_PARAMS));
-        const result = persistenceManager.getClientParams();
+        const result = storageManager.getClientParams();
         expect(result).toStrictEqual(TEST_CLIENT_PARAMS);
       });
     });
 
     describe("saveClientParams", () => {
       test("stores the given client params", () => {
-        persistenceManager.saveClientParams(TEST_CLIENT_PARAMS);
+        storageManager.saveClientParams(TEST_CLIENT_PARAMS);
         expect(localStorage.getItem(TEST_CLIENT_PARAMS_KEY)).toStrictEqual(JSON.stringify(TEST_CLIENT_PARAMS));
       });
     });
@@ -159,19 +159,19 @@ describe("PersistenceManager", () => {
   describe("ID token storage", () => {
     describe("getIdToken", () => {
       test("returns undefined if no ID token stored", () => {
-        expect(persistenceManager.getIdToken()).toBeUndefined();
+        expect(storageManager.getIdToken()).toBeUndefined();
       });
 
       test("returns the stored ID token", () => {
         localStorage.setItem(TEST_ID_TOKEN_KEY, JSON.stringify(TEST_ID_TOKEN_OBJECT));
-        const result = persistenceManager.getIdToken();
+        const result = storageManager.getIdToken();
         expect(result).toStrictEqual(TEST_ID_TOKEN_OBJECT);
       });
     });
 
     describe("saveIdToken", () => {
       test("stores the given ID token", () => {
-        persistenceManager.saveIdToken(TEST_ID_TOKEN_OBJECT);
+        storageManager.saveIdToken(TEST_ID_TOKEN_OBJECT);
         expect(localStorage.getItem(TEST_ID_TOKEN_KEY)).toStrictEqual(JSON.stringify(TEST_ID_TOKEN_OBJECT));
       });
     });
@@ -182,7 +182,7 @@ describe("PersistenceManager", () => {
     localStorage.setItem(TEST_ACCESS_TOKEN_KEY, JSON.stringify(TEST_ACCESS_TOKEN_OBJECT));
     localStorage.setItem(TEST_ID_TOKEN_KEY, JSON.stringify(TEST_ID_TOKEN_OBJECT));
     localStorage.setItem(TEST_CLIENT_PARAMS_KEY, JSON.stringify(TEST_CLIENT_PARAMS));
-    persistenceManager.remove();
+    storageManager.remove();
     expect(localStorage.length).toBe(0);
   });
 });

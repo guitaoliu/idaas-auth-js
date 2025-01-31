@@ -22,6 +22,13 @@ export interface IdaasClientOptions {
   clientId: string;
 
   /**
+   * The storage mechanism to use for ID and access tokens.
+   *
+   * @default "memory"
+   */
+  storageType?: "memory" | "localstorage";
+
+  /**
    * The global scope to be used.
    *
    * This defaults to `openid profile email` if not set. If you are setting extra scopes and require `profile` and `email` to be included then you must include them in the provided scope.

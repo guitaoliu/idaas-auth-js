@@ -1,7 +1,7 @@
 import { afterAll, afterEach, describe, expect, jest, spyOn, test } from "bun:test";
 import type { OidcLoginOptions } from "../../../src";
-import type { AccessToken } from "../../../src/PersistenceManager";
 import type { TokenResponse } from "../../../src/api";
+import type { AccessToken } from "../../../src/storage/StorageManager";
 import {
   NO_DEFAULT_IDAAS_CLIENT,
   SET_DEFAULTS_IDAAS_CLIENT,
@@ -28,17 +28,17 @@ describe("IdaasClient.getAccessToken", () => {
   });
 
   // @ts-ignore private
-  const spyOnPersistenceGetAccessTokens = spyOn(NO_DEFAULT_IDAAS_CLIENT.persistenceManager, "getAccessTokens");
+  const spyOnPersistenceGetAccessTokens = spyOn(NO_DEFAULT_IDAAS_CLIENT.storageManager, "getAccessTokens");
   // @ts-ignore private
   const spyOnRemoveUnusableTokens = spyOn(NO_DEFAULT_IDAAS_CLIENT, "removeUnusableTokens");
   // @ts-ignore not full type
   const spyOnFetch = spyOn(window, "fetch").mockImplementation(mockFetch);
   const storeToken = (token: AccessToken) => {
     // @ts-ignore private method call
-    NO_DEFAULT_IDAAS_CLIENT.persistenceManager.saveAccessToken(token);
+    NO_DEFAULT_IDAAS_CLIENT.storageManager.saveAccessToken(token);
   };
 
-  test("fetches stored access tokens from persistenceManager", async () => {
+  test("fetches stored access tokens from storageManager", async () => {
     await NO_DEFAULT_IDAAS_CLIENT.getAccessToken({
       fallbackAuthorizationOptions: {
         popup: true,
@@ -336,7 +336,7 @@ describe("IdaasClient.getAccessToken", () => {
       await NO_DEFAULT_IDAAS_CLIENT.getAccessToken({ fallbackAuthorizationOptions: {} });
 
       // @ts-ignore private
-      expect(NO_DEFAULT_IDAAS_CLIENT.persistenceManager.getAccessTokens()).toStrictEqual([]);
+      expect(NO_DEFAULT_IDAAS_CLIENT.storageManager.getAccessTokens()).toStrictEqual([]);
     });
 
     test("keeps tokens that have not reached their max_age", async () => {
@@ -344,7 +344,7 @@ describe("IdaasClient.getAccessToken", () => {
       await NO_DEFAULT_IDAAS_CLIENT.getAccessToken({ fallbackAuthorizationOptions: {} });
 
       // @ts-ignore private
-      expect(NO_DEFAULT_IDAAS_CLIENT.persistenceManager.getAccessTokens()).toStrictEqual([TEST_ACCESS_TOKEN_OBJECT]);
+      expect(NO_DEFAULT_IDAAS_CLIENT.storageManager.getAccessTokens()).toStrictEqual([TEST_ACCESS_TOKEN_OBJECT]);
     });
 
     test("removes a token with the requested scopes and audience that is expired and non-refreshable", async () => {

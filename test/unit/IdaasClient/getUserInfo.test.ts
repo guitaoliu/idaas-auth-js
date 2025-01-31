@@ -1,5 +1,5 @@
 import { afterAll, afterEach, describe, expect, jest, spyOn, test } from "bun:test";
-import type { IdToken } from "../../src/PersistenceManager";
+import type { IdToken } from "../../../src/storage/StorageManager";
 
 import { NO_DEFAULT_IDAAS_CLIENT, TEST_ACCESS_TOKEN, TEST_BASE_URI, TEST_ID_PAIR, TEST_SUB_CLAIM } from "../constants";
 import { mockFetch } from "../helpers";
@@ -8,7 +8,7 @@ describe("IdaasClient.getUserInfo", () => {
   // @ts-ignore not full type
   const spyOnFetch = spyOn(window, "fetch").mockImplementation(mockFetch);
   // @ts-ignore accessing private var
-  const spyOnGetIdToken = spyOn(NO_DEFAULT_IDAAS_CLIENT.persistenceManager, "getIdToken");
+  const spyOnGetIdToken = spyOn(NO_DEFAULT_IDAAS_CLIENT.storageManager, "getIdToken");
 
   afterAll(() => {
     jest.restoreAllMocks();
