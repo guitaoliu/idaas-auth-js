@@ -51,6 +51,7 @@ interface RequiredDetails {
   authRequestKey: string;
   applicationId: string;
   codeVerifier: string;
+  origin: string;
 }
 
 export class AuthenticationTransaction {
@@ -61,6 +62,7 @@ export class AuthenticationTransaction {
   private readonly strict: boolean;
   private readonly useRefreshToken: boolean;
   private readonly userId: string;
+  private readonly conditionalMediation?: boolean;
 
   private readonly audience?: string;
   private readonly maxAge?: number;
@@ -78,6 +80,8 @@ export class AuthenticationTransaction {
   private requiredDetails?: RequiredDetails;
   private token?: string;
 
+  private abortController?: AbortController;
+
   constructor({
     oidcConfig,
     userId,
@@ -90,13 +94,13 @@ export class AuthenticationTransaction {
     audience,
     maxAge,
     transactionDetails,
+    conditionalMediation,
   }: AuthenticationTransactionOptions) {
     const { issuer } = oidcConfig;
 
     this.authenticationDetails = {
       scope,
     };
-
     this.audience = audience;
     this.clientId = clientId;
     this.issuerOrigin = new URL(issuer).origin;
@@ -108,6 +112,7 @@ export class AuthenticationTransaction {
     this.transactionDetails = transactionDetails;
     this.useRefreshToken = useRefreshToken ?? false;
     this.userId = userId ?? "";
+    this.conditionalMediation = conditionalMediation;
   }
 
   private async handlePasskeyLogin(): Promise<void> {
@@ -127,7 +132,7 @@ export class AuthenticationTransaction {
       challenge: fidoChallenge.challenge ?? "",
     };
 
-    const authenticationResponseJson = await this.startWebAuthn(authChallenge, true);
+    const authenticationResponseJson = await this.startWebAuthn(authChallenge, this.conditionalMediation ?? true);
 
     this.fidoResponse = {
       authenticatorData: authenticationResponseJson.response.authenticatorData,
@@ -176,6 +181,7 @@ export class AuthenticationTransaction {
       authRequestKey,
       applicationId,
       codeVerifier,
+      origin: window.location.origin,
     };
 
     // 2. Get authentication method and second factor method
@@ -268,6 +274,7 @@ export class AuthenticationTransaction {
         userId: this.userId,
         authRequestKey: this.requiredDetails.authRequestKey,
         applicationId: this.requiredDetails.applicationId,
+        origin: this.requiredDetails.origin,
       },
       this.issuerOrigin,
     );
@@ -533,11 +540,19 @@ export class AuthenticationTransaction {
       throw new Error("error parsing authentication params");
     }
 
+    if (this.abortController) {
+      try {
+        this.abortController.abort("cancelled login ceremoney");
+      } catch {}
+    }
+
     const requestBody = this.constructUserAuthenticateParams("CANCEL");
 
     // end polling
     this.continuePolling = false;
-    await submitAuthChallenge(requestBody, method, token, this.issuerOrigin);
+    try {
+      await submitAuthChallenge(requestBody, method, token, this.issuerOrigin);
+    } catch {}
   }
 
   private shouldPoll = (method: string) => {
@@ -638,9 +653,10 @@ export class AuthenticationTransaction {
     return requestBody;
   };
 
-  private startWebAuthn = async (optionsJSON: PublicKeyCredentialRequestOptionsJSON, useBrowserAutofill = false) => {
+  private startWebAuthn = async (optionsJSON: PublicKeyCredentialRequestOptionsJSON, conditionalMediation = false) => {
     let allowCredentials = undefined;
     const abortController = new AbortController();
+    this.abortController = abortController;
     if (optionsJSON.allowCredentials?.length !== 0) {
       allowCredentials = optionsJSON.allowCredentials?.map(toPublicKeyCredentialDescriptor);
     }
@@ -659,8 +675,7 @@ export class AuthenticationTransaction {
      * Set up the page to prompt the user to select a credential for authentication via the browser's
      * input autofill mechanism.
      */
-
-    if (useBrowserAutofill) {
+    if (conditionalMediation) {
       getOptions.mediation = "conditional";
       // Conditional UI requires an empty allow list
       publicKey.allowCredentials = [];
@@ -674,7 +689,6 @@ export class AuthenticationTransaction {
 
     // Wait for the user to complete assertion
     const credential = (await navigator.credentials.get(getOptions)) as AuthenticationCredential;
-
     if (!credential) {
       throw new Error("Authentication was not completed");
     }

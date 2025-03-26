@@ -17,7 +17,7 @@
         "@rsbuild/plugin-type-check": "1.2.1",
         "@rslib/core": "0.3.2",
         "@tsconfig/bun": "1.0.7",
-        "@types/bun": "^1.2.0",
+        "@types/bun": "1.2.0",
         "@types/oidc-provider": "8.4.4",
         "@types/web": "0.0.143",
         "oidc-provider": "8.4.7",

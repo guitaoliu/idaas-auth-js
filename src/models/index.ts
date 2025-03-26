@@ -245,6 +245,11 @@ export interface AuthenticationRequestParams extends BaseLoginOptions {
    * The transaction details of the request.
    */
   transactionDetails?: TransactionDetail[];
+
+  /**
+   * Determines if mediation should be set to conditional for the PASSKEY authenticators.
+   */
+  conditionalMediation?: boolean;
 }
 
 /**
