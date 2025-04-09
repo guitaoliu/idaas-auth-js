@@ -217,22 +217,6 @@ export interface AuthenticationTransactionOptions extends AuthenticationRequestP
   clientId: string;
 }
 
-/**
- * The configurable options when requesting a PASSKEY authentication challenge.
- */
-export interface PasskeyOptions {
-  /**
-   * Determines if mediation should be set to conditional. If set to true but the browser does not support conditionalMediation,
-   * the SDK will proceed without setting mediation to conditional. Defaults to false.
-   */
-  conditionalMediation?: boolean;
-
-  /**
-   * Determins if the SDK should handle webauthn calls, if false requestChallenge will return the CredentialRequestOptions.
-   */
-  handleWebAuthn?: boolean;
-}
-
 export interface MutualChallenge {
   /**
    * Determines if the user must answer a mutual challenge for the TOKENPUSH and FACE authenticators.
@@ -268,11 +252,6 @@ export interface AuthenticationRequestParams extends BaseLoginOptions {
    * Determines if the preferred authentication method must be used.
    */
   strict?: boolean;
-
-  /**
-   * Options available during PASSKEY authentication
-   */
-  passkeyOptions?: PasskeyOptions;
 
   /**
    * Options available during TOKENPUSH authentication

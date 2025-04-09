@@ -14,7 +14,6 @@ import type {
   AuthenticationTransactionOptions,
   FaceBiometricOptions,
   IdaasAuthenticationMethod,
-  PasskeyOptions,
   PublicKeyCredentialRequestOptionsJSON,
   TokenPushOptions,
 } from "./models";
@@ -60,7 +59,6 @@ export class AuthenticationTransaction {
   private readonly clientId: string;
   private readonly issuerOrigin: string;
   private readonly faceBiometricOptions: FaceBiometricOptions;
-  private readonly passkeyOptions: PasskeyOptions;
   private readonly tokenPushOptions: TokenPushOptions;
   private readonly oidcConfig: OidcConfig;
   private readonly strict: boolean;
@@ -95,7 +93,6 @@ export class AuthenticationTransaction {
     strict,
     faceBiometricOptions,
     tokenPushOptions,
-    passkeyOptions,
     audience,
     maxAge,
     transactionDetails,
@@ -121,19 +118,11 @@ export class AuthenticationTransaction {
     this.transactionDetails = transactionDetails;
     this.useRefreshToken = useRefreshToken ?? false;
     this.userId = userId ?? "";
-    this.passkeyOptions = {
-      conditionalMediation: passkeyOptions?.conditionalMediation ?? false,
-      handleWebAuthn: passkeyOptions?.handleWebAuthn ?? true,
-    };
   }
 
   private async handlePasskeyLogin(): Promise<void> {
     if (!(await browserSupportsPasskey())) {
       throw new Error("This browser does not support passkey");
-    }
-
-    if (!(await PublicKeyCredential.isConditionalMediationAvailable())) {
-      this.passkeyOptions.conditionalMediation = false;
     }
 
     const { method } = this.authenticationDetails;
@@ -148,31 +137,10 @@ export class AuthenticationTransaction {
       challenge: fidoChallenge.challenge ?? "",
     };
 
-    if (this.passkeyOptions.handleWebAuthn) {
-      const authenticationResponseJson = await this.startWebAuthn(
-        authChallenge,
-        this.passkeyOptions.conditionalMediation,
-      );
-
-      this.fidoResponse = {
-        authenticatorData: authenticationResponseJson.response.authenticatorData,
-        clientDataJSON: authenticationResponseJson.response.clientDataJSON,
-        credentialId: authenticationResponseJson.id,
-        signature: authenticationResponseJson.response.signature,
-        userHandle: authenticationResponseJson.response.userHandle,
-      };
-    } else {
-      this.credentialRequestOptions = this.getCredentialRequestOptions(
-        authChallenge,
-        this.passkeyOptions.conditionalMediation,
-      );
-    }
+    this.credentialRequestOptions = this.getCredentialRequestOptions(authChallenge);
   }
 
-  private getCredentialRequestOptions(
-    optionsJSON: PublicKeyCredentialRequestOptionsJSON,
-    conditionalMediation = false,
-  ): CredentialRequestOptions {
+  private getCredentialRequestOptions(optionsJSON: PublicKeyCredentialRequestOptionsJSON): CredentialRequestOptions {
     let allowCredentials = undefined;
 
     if (optionsJSON.allowCredentials?.length !== 0) {
@@ -188,16 +156,6 @@ export class AuthenticationTransaction {
 
     // Prepare options for `.get()`
     const getOptions: CredentialRequestOptions = {};
-
-    /**
-     * Set up the page to prompt the user to select a credential for authentication via the browser's
-     * input autofill mechanism.
-     */
-    if (conditionalMediation) {
-      getOptions.mediation = "conditional";
-      // Conditional UI requires an empty allow list
-      publicKey.allowCredentials = [];
-    }
 
     // Finalize options
     getOptions.publicKey = publicKey;
@@ -721,11 +679,11 @@ export class AuthenticationTransaction {
     return requestBody;
   };
 
-  private startWebAuthn = async (optionsJSON: PublicKeyCredentialRequestOptionsJSON, conditionalMediation = false) => {
+  private startWebAuthn = async (optionsJSON: PublicKeyCredentialRequestOptionsJSON) => {
     const abortController = new AbortController();
     this.abortController = abortController;
 
-    const getOptions = this.getCredentialRequestOptions(optionsJSON, conditionalMediation);
+    const getOptions = this.getCredentialRequestOptions(optionsJSON);
 
     // Wait for the user to complete assertion
     const credential = (await navigator.credentials.get({
