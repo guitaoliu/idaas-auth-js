@@ -12,7 +12,7 @@
     "indentWidth": 2,
     "indentStyle": "space",
     "lineWidth": 120,
-    "ignore": ["package.json", "authentication.json"]
+    "ignore": ["package.json", "authentication.json", "./test"]
   },
   "linter": {
     "enabled": true,

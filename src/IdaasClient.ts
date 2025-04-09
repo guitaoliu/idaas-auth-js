@@ -10,6 +10,7 @@ import {
   requestToken,
 } from "./api";
 import type {
+  AuthenticationCredential,
   AuthenticationRequestParams,
   AuthenticationResponse,
   AuthenticationSubmissionParams,
@@ -86,10 +87,24 @@ export class IdaasClient {
         popupWindow.close();
         throw new Error("Attempted to use popup but web_message is not supported by OpenID provider.");
       }
-      return await this.loginWithPopup({ audience, scope, redirectUri, useRefreshToken, acrValues, maxAge });
+      return await this.loginWithPopup({
+        audience,
+        scope,
+        redirectUri,
+        useRefreshToken,
+        acrValues,
+        maxAge,
+      });
     }
 
-    await this.loginWithRedirect({ audience, scope, redirectUri, useRefreshToken, acrValues, maxAge });
+    await this.loginWithRedirect({
+      audience,
+      scope,
+      redirectUri,
+      useRefreshToken,
+      acrValues,
+      maxAge,
+    });
 
     return null;
   }
@@ -351,7 +366,14 @@ export class IdaasClient {
     if (fallbackAuthorizationOptions) {
       const { redirectUri, useRefreshToken, popup } = fallbackAuthorizationOptions;
 
-      return await this.login({ scope, audience, popup, useRefreshToken, redirectUri, acrValues });
+      return await this.login({
+        scope,
+        audience,
+        popup,
+        useRefreshToken,
+        redirectUri,
+        acrValues,
+      });
     }
 
     throw new Error("Requested token not found, no fallback login specified");
@@ -386,7 +408,10 @@ export class IdaasClient {
       acr,
     };
 
-    this.storageManager.saveIdToken({ encoded: encodedIdToken, decoded: decodedIdToken });
+    this.storageManager.saveIdToken({
+      encoded: encodedIdToken,
+      decoded: decodedIdToken,
+    });
     this.storageManager.saveAccessToken(newAccessToken);
   }
 
@@ -481,7 +506,9 @@ export class IdaasClient {
     expectedState: string,
   ): string {
     if (error) {
-      throw new Error("Error during authorization", { cause: error_description });
+      throw new Error("Error during authorization", {
+        cause: error_description,
+      });
     }
 
     if (!(code && state)) {
@@ -550,7 +577,12 @@ export class IdaasClient {
     audience: string | undefined = this.globalAudience,
     acrValues: string[] = [],
     maxAge = -1,
-  ): Promise<{ url: string; nonce: string; state: string; codeVerifier: string }> {
+  ): Promise<{
+    url: string;
+    nonce: string;
+    state: string;
+    codeVerifier: string;
+  }> {
     const { authorization_endpoint } = await this.getConfig();
     const scopeAsArray = scope.split(" ");
 
@@ -583,7 +615,11 @@ export class IdaasClient {
 
     if (maxAge >= 0) {
       url.searchParams.append("max_age", maxAge.toString());
-      this.storageManager.saveTokenParams({ audience, scope: usedScope, maxAge });
+      this.storageManager.saveTokenParams({
+        audience,
+        scope: usedScope,
+        maxAge,
+      });
     } else {
       this.storageManager.saveTokenParams({ audience, scope: usedScope });
     }
@@ -696,6 +732,10 @@ export class IdaasClient {
       throw new Error("No authentication transaction in progress!");
     }
 
+    if (options.credential) {
+      this.authenticationTransaction.submitPasskey(options.credential as AuthenticationCredential);
+    }
+
     const authenticationResponse = await this.authenticationTransaction.submitAuthChallenge({ ...options });
 
     if (authenticationResponse.authenticationCompleted) {
@@ -719,7 +759,10 @@ export class IdaasClient {
     }
 
     // Saving tokens
-    this.storageManager.saveIdToken({ encoded: idToken, decoded: decodeJwt(idToken) });
+    this.storageManager.saveIdToken({
+      encoded: idToken,
+      decoded: decodeJwt(idToken),
+    });
     this.storageManager.saveAccessToken({
       accessToken,
       expiresAt,

@@ -73,5 +73,5 @@ export const listenToAuthorizePopup = (popup: Window, url: string) => {
 };
 
 export const browserSupportsPasskey = async (): Promise<boolean> => {
-  return window.PublicKeyCredential && (await PublicKeyCredential.isConditionalMediationAvailable());
+  return !!window.PublicKeyCredential;
 };

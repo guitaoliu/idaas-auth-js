@@ -6,11 +6,7 @@
   "homepage": "https://github.com/EntrustCorporation/idaas-auth-spa",
   "license": "Apache-2.0",
   "type": "module",
-  "files": [
-    "dist",
-    "LICENSE",
-    "README.md"
-  ],
+  "files": ["dist", "LICENSE", "README.md"],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/EntrustCorporation/idaas-auth-spa.git"
@@ -18,15 +14,7 @@
   "bugs": {
     "url": "https://github.com/EntrustCorporation/idaas-auth-spa/issues"
   },
-  "keywords": [
-    "Entrust",
-    "authentication",
-    "authorization",
-    "auth",
-    "oidc",
-    "spa",
-    "pkce"
-  ],
+  "keywords": ["Entrust", "authentication", "authorization", "auth", "oidc", "spa", "pkce"],
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -48,8 +36,10 @@
     "build": "rslib build",
     "api:download": "bun scripts/download.ts",
     "api:generate": "openapi-ts",
-    "lint": "biome ci .",
-    "lint:fix": "biome format . --write && bun run lint",
+    "ci": "biome ci . && bun run build",
+    "ci:fix": "bun run format --write && bun run lint --write",
+    "format": "biome format .",
+    "lint": "biome check .",
     "lint:types": "attw .",
     "test:e2e": "bunx playwright test"
   },
@@ -58,7 +48,7 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.17.3",
-    "@biomejs/biome": "1.7.1",
+    "@biomejs/biome": "1.9.4",
     "@happy-dom/global-registrator": "14.12.0",
     "@hey-api/client-fetch": "0.5.2",
     "@hey-api/openapi-ts": "0.59.1",

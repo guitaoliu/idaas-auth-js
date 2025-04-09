@@ -218,6 +218,39 @@ export interface AuthenticationTransactionOptions extends AuthenticationRequestP
 }
 
 /**
+ * The configurable options when requesting a PASSKEY authentication challenge.
+ */
+export interface PasskeyOptions {
+  /**
+   * Determines if mediation should be set to conditional. If set to true but the browser does not support conditionalMediation,
+   * the SDK will proceed without setting mediation to conditional. Defaults to false.
+   */
+  conditionalMediation?: boolean;
+
+  /**
+   * Determins if the SDK should handle webauthn calls, if false requestChallenge will return the CredentialRequestOptions.
+   */
+  handleWebAuthn?: boolean;
+}
+
+export interface MutualChallenge {
+  /**
+   * Determines if the user must answer a mutual challenge for the TOKENPUSH and FACE authenticators.
+   */
+  mutualChallengeEnabled?: boolean;
+}
+
+/**
+ * The configurable options when requesting a FACE authentication challenge.
+ */
+export interface FaceBiometricOptions extends MutualChallenge {}
+
+/**
+ * The configurable options when requesting a TOKENPUSH authentication challenge.
+ */
+export interface TokenPushOptions extends MutualChallenge {}
+
+/**
  * The configurable options when requesting an authentication challenge.
  */
 export interface AuthenticationRequestParams extends BaseLoginOptions {
@@ -237,19 +270,24 @@ export interface AuthenticationRequestParams extends BaseLoginOptions {
   strict?: boolean;
 
   /**
-   * Determines if the user must answer a mutual challenge for the TOKENPUSH and FACE authenticators.
+   * Options available during PASSKEY authentication
    */
-  mutualChallengeEnabled?: boolean;
+  passkeyOptions?: PasskeyOptions;
+
+  /**
+   * Options available during TOKENPUSH authentication
+   */
+  tokenPushOptions?: TokenPushOptions;
+
+  /**
+   * Options available during FACE authentication
+   */
+  faceBiometricOptions?: FaceBiometricOptions;
 
   /**
    * The transaction details of the request.
    */
   transactionDetails?: TransactionDetail[];
-
-  /**
-   * Determines if mediation should be set to conditional for the PASSKEY authenticators.
-   */
-  conditionalMediation?: boolean;
 }
 
 /**
@@ -267,6 +305,11 @@ export interface AuthenticationSubmissionParams {
    */
   // TODO: individual responses (ie gridResponse, password, OTP, etc) ??
   kbaChallengeAnswers?: string[];
+
+  /**
+   * The credential returned from navigator.credentials.get(credentialRequestOptions).
+   */
+  credential?: Credential;
 }
 
 export interface AuthenticationResponse {
@@ -322,6 +365,11 @@ export interface AuthenticationResponse {
    * Push authentication mutual challenge for token or Face Biometric.
    */
   pushMutualChallenge?: string;
+
+  /**
+   * Credential request options to be used for the webauthn call.
+   */
+  credentialRequestOptions?: CredentialRequestOptions;
 }
 
 export type IdaasAuthenticationMethod =

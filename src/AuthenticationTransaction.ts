@@ -12,8 +12,11 @@ import type {
   AuthenticationResponse,
   AuthenticationSubmissionParams,
   AuthenticationTransactionOptions,
+  FaceBiometricOptions,
   IdaasAuthenticationMethod,
+  PasskeyOptions,
   PublicKeyCredentialRequestOptionsJSON,
+  TokenPushOptions,
 } from "./models";
 import type {
   AuthenticatedResponse,
@@ -56,12 +59,13 @@ interface RequiredDetails {
 export class AuthenticationTransaction {
   private readonly clientId: string;
   private readonly issuerOrigin: string;
-  private readonly mutualChallengeEnabled: boolean;
+  private readonly faceBiometricOptions: FaceBiometricOptions;
+  private readonly passkeyOptions: PasskeyOptions;
+  private readonly tokenPushOptions: TokenPushOptions;
   private readonly oidcConfig: OidcConfig;
   private readonly strict: boolean;
   private readonly useRefreshToken: boolean;
   private readonly userId: string;
-  private readonly conditionalMediation: boolean;
 
   private readonly audience?: string;
   private readonly maxAge?: number;
@@ -76,6 +80,7 @@ export class AuthenticationTransaction {
   private fidoChallenge?: FIDOChallenge;
   private fidoResponse?: FIDOResponse;
   private kbaChallenge?: KbaChallenge;
+  private credentialRequestOptions?: CredentialRequestOptions;
   private requiredDetails?: RequiredDetails;
   private token?: string;
   private abortController?: AbortController;
@@ -88,11 +93,12 @@ export class AuthenticationTransaction {
     clientId,
     preferredAuthenticationMethod,
     strict,
-    mutualChallengeEnabled,
+    faceBiometricOptions,
+    tokenPushOptions,
+    passkeyOptions,
     audience,
     maxAge,
     transactionDetails,
-    conditionalMediation,
   }: AuthenticationTransactionOptions) {
     const { issuer } = oidcConfig;
 
@@ -103,19 +109,31 @@ export class AuthenticationTransaction {
     this.clientId = clientId;
     this.issuerOrigin = new URL(issuer).origin;
     this.maxAge = maxAge;
-    this.mutualChallengeEnabled = mutualChallengeEnabled ?? false;
+    this.tokenPushOptions = {
+      mutualChallengeEnabled: tokenPushOptions?.mutualChallengeEnabled ?? false,
+    };
+    this.faceBiometricOptions = {
+      mutualChallengeEnabled: faceBiometricOptions?.mutualChallengeEnabled ?? false,
+    };
     this.oidcConfig = oidcConfig;
     this.preferredAuthenticationMethod = preferredAuthenticationMethod;
     this.strict = strict ?? false;
     this.transactionDetails = transactionDetails;
     this.useRefreshToken = useRefreshToken ?? false;
     this.userId = userId ?? "";
-    this.conditionalMediation = conditionalMediation ?? true;
+    this.passkeyOptions = {
+      conditionalMediation: passkeyOptions?.conditionalMediation ?? false,
+      handleWebAuthn: passkeyOptions?.handleWebAuthn ?? true,
+    };
   }
 
   private async handlePasskeyLogin(): Promise<void> {
     if (!(await browserSupportsPasskey())) {
       throw new Error("This browser does not support passkey");
+    }
+
+    if (!(await PublicKeyCredential.isConditionalMediationAvailable())) {
+      this.passkeyOptions.conditionalMediation = false;
     }
 
     const { method } = this.authenticationDetails;
@@ -130,15 +148,61 @@ export class AuthenticationTransaction {
       challenge: fidoChallenge.challenge ?? "",
     };
 
-    const authenticationResponseJson = await this.startWebAuthn(authChallenge, this.conditionalMediation);
+    if (this.passkeyOptions.handleWebAuthn) {
+      const authenticationResponseJson = await this.startWebAuthn(
+        authChallenge,
+        this.passkeyOptions.conditionalMediation,
+      );
 
-    this.fidoResponse = {
-      authenticatorData: authenticationResponseJson.response.authenticatorData,
-      clientDataJSON: authenticationResponseJson.response.clientDataJSON,
-      credentialId: authenticationResponseJson.id,
-      signature: authenticationResponseJson.response.signature,
-      userHandle: authenticationResponseJson.response.userHandle,
+      this.fidoResponse = {
+        authenticatorData: authenticationResponseJson.response.authenticatorData,
+        clientDataJSON: authenticationResponseJson.response.clientDataJSON,
+        credentialId: authenticationResponseJson.id,
+        signature: authenticationResponseJson.response.signature,
+        userHandle: authenticationResponseJson.response.userHandle,
+      };
+    } else {
+      this.credentialRequestOptions = this.getCredentialRequestOptions(
+        authChallenge,
+        this.passkeyOptions.conditionalMediation,
+      );
+    }
+  }
+
+  private getCredentialRequestOptions(
+    optionsJSON: PublicKeyCredentialRequestOptionsJSON,
+    conditionalMediation = false,
+  ): CredentialRequestOptions {
+    let allowCredentials = undefined;
+
+    if (optionsJSON.allowCredentials?.length !== 0) {
+      allowCredentials = optionsJSON.allowCredentials?.map(toPublicKeyCredentialDescriptor);
+    }
+
+    // We need to convert some values to Uint8Arrays before passing the credentials to the navigator
+    const publicKey: PublicKeyCredentialRequestOptions = {
+      ...optionsJSON,
+      challenge: base64URLStringToBuffer(optionsJSON.challenge),
+      allowCredentials,
     };
+
+    // Prepare options for `.get()`
+    const getOptions: CredentialRequestOptions = {};
+
+    /**
+     * Set up the page to prompt the user to select a credential for authentication via the browser's
+     * input autofill mechanism.
+     */
+    if (conditionalMediation) {
+      getOptions.mediation = "conditional";
+      // Conditional UI requires an empty allow list
+      publicKey.allowCredentials = [];
+    }
+
+    // Finalize options
+    getOptions.publicKey = publicKey;
+
+    return getOptions;
   }
 
   private async handleFidoLogin(): Promise<void> {
@@ -213,6 +277,7 @@ export class AuthenticationTransaction {
 
     return {
       ...requestAuthChallengeResponse,
+      credentialRequestOptions: this.credentialRequestOptions,
       pollForCompletion,
       method,
       userId: this.userId,
@@ -579,8 +644,12 @@ export class AuthenticationTransaction {
       requestBody.origin = window.location.origin;
     }
 
-    if (method === "TOKENPUSH" || method === "FACE") {
-      requestBody.pushMutualChallengeEnabled = this.mutualChallengeEnabled;
+    if (method === "TOKENPUSH") {
+      requestBody.pushMutualChallengeEnabled = this.tokenPushOptions.mutualChallengeEnabled;
+    }
+
+    if (method === "FACE") {
+      requestBody.pushMutualChallengeEnabled = this.faceBiometricOptions.mutualChallengeEnabled;
     }
 
     if (this.isSecondFactor) {
@@ -588,8 +657,12 @@ export class AuthenticationTransaction {
         throw new Error("Error parsing authentication params");
       }
 
-      if (secondFactor === "TOKENPUSH" || secondFactor === "FACE") {
-        requestBody.pushMutualChallengeEnabled = this.mutualChallengeEnabled;
+      if (secondFactor === "TOKENPUSH") {
+        requestBody.pushMutualChallengeEnabled = this.tokenPushOptions.mutualChallengeEnabled;
+      }
+
+      if (secondFactor === "FACE") {
+        requestBody.pushMutualChallengeEnabled = this.faceBiometricOptions.mutualChallengeEnabled;
       }
 
       if (secondFactor === "FIDO") {
@@ -649,41 +722,16 @@ export class AuthenticationTransaction {
   };
 
   private startWebAuthn = async (optionsJSON: PublicKeyCredentialRequestOptionsJSON, conditionalMediation = false) => {
-    let allowCredentials = undefined;
     const abortController = new AbortController();
     this.abortController = abortController;
-    if (optionsJSON.allowCredentials?.length !== 0) {
-      allowCredentials = optionsJSON.allowCredentials?.map(toPublicKeyCredentialDescriptor);
-    }
 
-    // We need to convert some values to Uint8Arrays before passing the credentials to the navigator
-    const publicKey: PublicKeyCredentialRequestOptions = {
-      ...optionsJSON,
-      challenge: base64URLStringToBuffer(optionsJSON.challenge),
-      allowCredentials,
-    };
-
-    // Prepare options for `.get()`
-    const getOptions: CredentialRequestOptions = {};
-
-    /**
-     * Set up the page to prompt the user to select a credential for authentication via the browser's
-     * input autofill mechanism.
-     */
-    if (conditionalMediation) {
-      getOptions.mediation = "conditional";
-      // Conditional UI requires an empty allow list
-      publicKey.allowCredentials = [];
-    }
-
-    // Finalize options
-    getOptions.publicKey = publicKey;
-    // Set up the ability to cancel this request if the user attempts another
-    getOptions.signal = abortController.signal;
-    // TODO: remove dependency
+    const getOptions = this.getCredentialRequestOptions(optionsJSON, conditionalMediation);
 
     // Wait for the user to complete assertion
-    const credential = (await navigator.credentials.get(getOptions)) as AuthenticationCredential;
+    const credential = (await navigator.credentials.get({
+      ...getOptions,
+      signal: abortController.signal,
+    })) as AuthenticationCredential;
     if (!credential) {
       throw new Error("Authentication was not completed");
     }
@@ -705,6 +753,24 @@ export class AuthenticationTransaction {
         signature: bufferToBase64URLString(response.signature),
         userHandle,
       },
+    };
+  };
+
+  public submitPasskey = async (credential: AuthenticationCredential) => {
+    const { id, response } = credential;
+
+    let userHandle = undefined;
+
+    if (response.userHandle) {
+      userHandle = bufferToBase64URLString(response.userHandle);
+    }
+
+    this.fidoResponse = {
+      authenticatorData: bufferToBase64URLString(response.authenticatorData),
+      clientDataJSON: bufferToBase64URLString(response.clientDataJSON),
+      credentialId: id,
+      signature: bufferToBase64URLString(response.signature),
+      userHandle,
     };
   };
 }
