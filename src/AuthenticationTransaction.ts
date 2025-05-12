@@ -78,7 +78,7 @@ export class AuthenticationTransaction {
   private fidoChallenge?: FIDOChallenge;
   private fidoResponse?: FIDOResponse;
   private kbaChallenge?: KbaChallenge;
-  private credentialRequestOptions?: CredentialRequestOptions;
+  private publicKeyCredentialRequestOptions?: PublicKeyCredentialRequestOptions;
   private requiredDetails?: RequiredDetails;
   private token?: string;
   private abortController?: AbortController;
@@ -137,10 +137,12 @@ export class AuthenticationTransaction {
       challenge: fidoChallenge.challenge ?? "",
     };
 
-    this.credentialRequestOptions = this.getCredentialRequestOptions(authChallenge);
+    this.publicKeyCredentialRequestOptions = this.getCredentialRequestOptions(authChallenge);
   }
 
-  private getCredentialRequestOptions(optionsJSON: PublicKeyCredentialRequestOptionsJSON): CredentialRequestOptions {
+  private getCredentialRequestOptions(
+    optionsJSON: PublicKeyCredentialRequestOptionsJSON,
+  ): PublicKeyCredentialRequestOptions {
     let allowCredentials = undefined;
 
     if (optionsJSON.allowCredentials?.length !== 0) {
@@ -154,13 +156,7 @@ export class AuthenticationTransaction {
       allowCredentials,
     };
 
-    // Prepare options for `.get()`
-    const getOptions: CredentialRequestOptions = {};
-
-    // Finalize options
-    getOptions.publicKey = publicKey;
-
-    return getOptions;
+    return publicKey;
   }
 
   private async handleFidoLogin(): Promise<void> {
@@ -235,7 +231,7 @@ export class AuthenticationTransaction {
 
     return {
       ...requestAuthChallengeResponse,
-      credentialRequestOptions: this.credentialRequestOptions,
+      publicKeyCredentialRequestOptions: this.publicKeyCredentialRequestOptions,
       pollForCompletion,
       method,
       userId: this.userId,
@@ -687,7 +683,7 @@ export class AuthenticationTransaction {
 
     // Wait for the user to complete assertion
     const credential = (await navigator.credentials.get({
-      ...getOptions,
+      publicKey: getOptions,
       signal: abortController.signal,
     })) as AuthenticationCredential;
     if (!credential) {
@@ -723,6 +719,7 @@ export class AuthenticationTransaction {
       userHandle = bufferToBase64URLString(response.userHandle);
     }
 
+    // Convert values to base64 to make it easier to send back to the server
     this.fidoResponse = {
       authenticatorData: bufferToBase64URLString(response.authenticatorData),
       clientDataJSON: bufferToBase64URLString(response.clientDataJSON),

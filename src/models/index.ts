@@ -346,9 +346,9 @@ export interface AuthenticationResponse {
   pushMutualChallenge?: string;
 
   /**
-   * Credential request options to be used for the webauthn call.
+   * The PublicKeyCredentialRequestOptions to be passed in the publicKey field to the navigator.credential.get() call.
    */
-  credentialRequestOptions?: CredentialRequestOptions;
+  publicKeyCredentialRequestOptions?: PublicKeyCredentialRequestOptions;
 }
 
 export type IdaasAuthenticationMethod =
