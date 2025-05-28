@@ -2,7 +2,7 @@
   "lockfileVersion": 1,
   "workspaces": {
     "": {
-      "name": "@entrustcorp/idaas-auth-spa",
+      "name": "@entrustcorp/idaas-auth-js",
       "dependencies": {
         "jose": "5.2.4",
       },

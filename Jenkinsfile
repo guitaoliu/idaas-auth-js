@@ -52,6 +52,7 @@ pipeline {
         expression { params.publish == true }
       }
       steps {
+        sh 'echo \"//registry.npmjs.org/:_authToken=$NODE_AUTH_TOKEN\" >> .npmrc'
         sh "npm publish --provenance --access public"
       }
       post {

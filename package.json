@@ -1,5 +1,5 @@
 {
-  "name": "@entrustcorp/idaas-auth-spa",
+  "name": "@entrustcorp/idaas-auth-js",
   "description": "IDaaS Authentication SDK for SPA applications",
   "version": "0.1.39",
   "author": "Entrust",
