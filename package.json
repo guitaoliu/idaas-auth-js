@@ -58,9 +58,9 @@
     "@rslib/core": "0.3.2",
     "@tsconfig/bun": "1.0.7",
     "@types/bun": "1.2.0",
-    "@types/oidc-provider": "8.4.4",
+    "@types/oidc-provider": "9.1.1",
     "@types/web": "0.0.143",
-    "oidc-provider": "8.4.7",
+    "oidc-provider": "9.2.0",
     "rsbuild-plugin-publint": "0.2.1",
     "typescript": "5.7.3"
   }

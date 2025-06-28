@@ -26,7 +26,7 @@ const providerConfig: Configuration = {
     },
     webMessageResponseMode: {
       enabled: true,
-      ack: "individual-draft-00",
+      ack: "individual-draft-01",
     },
   },
   rotateRefreshToken: true,
