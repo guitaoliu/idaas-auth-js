@@ -47,21 +47,21 @@
     "jose": "6.0.11"
   },
   "devDependencies": {
-    "@arethetypeswrong/cli": "0.17.3",
+    "@arethetypeswrong/cli": "0.18.2",
     "@biomejs/biome": "2.0.6",
     "@happy-dom/global-registrator": "18.0.1",
-    "@hey-api/client-fetch": "0.5.2",
-    "@hey-api/openapi-ts": "0.59.1",
-    "@microsoft/api-extractor": "7.49.1",
-    "@playwright/test": "1.49.1",
-    "@rsbuild/plugin-type-check": "1.2.1",
-    "@rslib/core": "0.3.2",
-    "@tsconfig/bun": "1.0.7",
-    "@types/bun": "1.2.0",
-    "@types/oidc-provider": "9.1.1",
-    "@types/web": "0.0.143",
-    "oidc-provider": "9.2.0",
-    "rsbuild-plugin-publint": "0.2.1",
-    "typescript": "5.7.3"
+    "@hey-api/client-fetch": "0.13.1",
+    "@hey-api/openapi-ts": "0.77.0",
+    "@microsoft/api-extractor": "7.52.8",
+    "@playwright/test": "1.53.2",
+    "@rsbuild/plugin-type-check": "1.2.3",
+    "@rslib/core": "0.10.4",
+    "@tsconfig/bun": "1.0.8",
+    "@types/bun": "1.2.18",
+    "@types/oidc-provider": "8.8.1",
+    "@types/web": "0.0.245",
+    "oidc-provider": "8.8.1",
+    "rsbuild-plugin-publint": "0.3.2",
+    "typescript": "5.8.3"
   }
 }
