@@ -20,8 +20,8 @@ import type {
 import type {
   AuthenticatedResponse,
   FaceChallenge,
-  FIDOChallenge,
-  FIDOResponse,
+  FidoChallenge,
+  FidoResponse,
   KbaChallenge,
   TransactionDetail,
   UserAuthenticateParameters,
@@ -76,8 +76,8 @@ export class AuthenticationTransaction {
   private isSecondFactor = false;
 
   private faceChallenge?: FaceChallenge;
-  private fidoChallenge?: FIDOChallenge;
-  private fidoResponse?: FIDOResponse;
+  private fidoChallenge?: FidoChallenge;
+  private fidoResponse?: FidoResponse;
   private kbaChallenge?: KbaChallenge;
   private publicKeyCredentialRequestOptions?: PublicKeyCredentialRequestOptions;
   private requiredDetails?: RequiredDetails;
@@ -334,6 +334,11 @@ export class AuthenticationTransaction {
         };
       }
     }
+
+    if (!authenticationTypes[0]) {
+      throw new Error("No authentication methods available for the user");
+    }
+
     // default or when `preferredAuthenticationMethod` is not available
     return {
       authenticationMethod: authenticationTypes[0],
@@ -357,8 +362,9 @@ export class AuthenticationTransaction {
     }
     for (let i = 0; i < answers.length; i++) {
       const answer = answers[i];
-      if (this.kbaChallenge?.userQuestions[i]) {
-        this.kbaChallenge.userQuestions[i].answer = answer;
+      const userQuestion = this.kbaChallenge.userQuestions?.[i];
+      if (userQuestion) {
+        userQuestion.answer = answer;
       } else {
         // More answers provided than questions
         throw new Error("invalid user response");

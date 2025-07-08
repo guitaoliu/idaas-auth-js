@@ -14,7 +14,7 @@ export type {
 
 export type {
   FaceChallenge,
-  FIDOChallenge,
+  FidoChallenge,
   GridChallenge,
   KbaChallenge,
   TempAccessCodeChallenge,
