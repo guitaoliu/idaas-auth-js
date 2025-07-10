@@ -49,7 +49,7 @@ document.getElementById("login-with-popup")?.addEventListener("click", async () 
   console.info("Logging in with popup flow");
 
   try {
-    await idaasClient.login({ redirectUri: DEV_SERVER, popup: true, useRefreshToken: true });
+    await idaasClient.oidc.login({ redirectUri: DEV_SERVER, popup: true, useRefreshToken: true });
   } catch (e) {
     console.error("Login with popup failed.", e);
   }
@@ -61,7 +61,7 @@ document.getElementById("login-with-redirect")?.addEventListener("click", async 
   console.info("Logging in with redirect flow");
 
   try {
-    await idaasClient.login({ redirectUri: DEV_SERVER, popup: false, useRefreshToken: true });
+    await idaasClient.oidc.login({ redirectUri: DEV_SERVER, popup: false, useRefreshToken: true });
   } catch (e) {
     console.error("Login with redirect failed.", e);
   }
@@ -73,7 +73,7 @@ document.getElementById("logout")?.addEventListener("click", async () => {
   console.info("Logging out");
 
   try {
-    await idaasClient.logout({ redirectUri: DEV_SERVER });
+    await idaasClient.oidc.logout({ redirectUri: DEV_SERVER });
   } catch (e) {
     console.error("Logout failed", e);
   }
@@ -85,7 +85,7 @@ document.getElementById("handle-redirect")?.addEventListener("click", async () =
   console.info("Handling redirect");
 
   try {
-    await idaasClient.handleRedirect();
+    await idaasClient.oidc.handleRedirect();
   } catch (e) {
     console.error("Handle redirect failed", e);
   }

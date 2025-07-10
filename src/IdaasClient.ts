@@ -63,6 +63,14 @@ export class IdaasClient {
     this.clientId = clientId;
   }
 
+  public get oidc() {
+    return {
+      login: this.login.bind(this),
+      logout: this.logout.bind(this),
+      handleRedirect: this.handleRedirect.bind(this),
+    };
+  }
+
   /**
    * Perform the authorization code flow by authenticating the user to obtain an access token and optionally refresh and
    * ID tokens.
@@ -70,7 +78,7 @@ export class IdaasClient {
    * If using redirect (i.e. popup=false), your application must also be configured to call handleRedirect at the redirectUri
    * to complete the flow.
    * */
-  public async login({
+  private async login({
     audience,
     scope,
     redirectUri,
@@ -189,7 +197,7 @@ export class IdaasClient {
    * Handle the callback to the login redirectUri post-authorize and pass the received code to the token endpoint to get
    * the access token, ID token, and optionally refresh token (optional). Additionally, validate the ID token claims.
    */
-  public async handleRedirect(): Promise<null> {
+  private async handleRedirect(): Promise<null> {
     const { authorizeResponse } = this.parseRedirect();
 
     // The current url is not an authorized callback url
@@ -239,7 +247,7 @@ export class IdaasClient {
   /**
    * Clear the application session and navigate to the OpenID Provider's (OP) endsession endpoint.
    */
-  public async logout({ redirectUri }: LogoutOptions = {}): Promise<void> {
+  private async logout({ redirectUri }: LogoutOptions = {}): Promise<void> {
     if (!this.isAuthenticated()) {
       // Discontinue logout, the user is not authenticated
       return;
