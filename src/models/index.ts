@@ -254,6 +254,11 @@ export interface AuthenticationRequestParams extends BaseLoginOptions {
   strict?: boolean;
 
   /**
+   * Determines the strength/quality of the method used to authenticate the user.
+   */
+  acrValues?: string[];
+
+  /**
    * Options available during TOKENPUSH authentication
    */
   tokenPushOptions?: TokenPushOptions;

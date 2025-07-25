@@ -69,6 +69,7 @@ export class AuthenticationTransaction {
   private readonly maxAge?: number;
   private readonly preferredAuthenticationMethod?: IdaasAuthenticationMethod;
   private readonly transactionDetails?: TransactionDetail[];
+  private readonly acrValues?: string[];
 
   private authenticationDetails: AuthenticationDetails;
   private continuePolling = false;
@@ -96,6 +97,7 @@ export class AuthenticationTransaction {
     audience,
     maxAge,
     transactionDetails,
+    acrValues,
   }: AuthenticationTransactionOptions) {
     const { issuer } = oidcConfig;
 
@@ -118,6 +120,7 @@ export class AuthenticationTransaction {
     this.transactionDetails = transactionDetails;
     this.useRefreshToken = useRefreshToken ?? false;
     this.userId = userId ?? "";
+    this.acrValues = acrValues;
   }
 
   private async handlePasskeyLogin(): Promise<void> {
@@ -244,6 +247,11 @@ export class AuthenticationTransaction {
     // Note: The PKCE spec defines an additional code_challenge_method 'plain', but it is explicitly NOT recommended
     // https://datatracker.ietf.org/doc/html/rfc7636#section-7.2
     url.searchParams.append("code_challenge_method", "S256");
+
+    if (this.acrValues && this.acrValues.length > 0) {
+      const acrString = this.acrValues.join(" ");
+      url.searchParams.append("acr_values", acrString);
+    }
 
     this.authenticationDetails.scope = usedScope;
 
