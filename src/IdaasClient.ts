@@ -658,15 +658,15 @@ export class IdaasClient {
     return this.config ? this.config : await fetchOpenidConfiguration(this.issuerUrl);
   }
 
-  private initializeAuthenticationTransaction = async (options: AuthenticationRequestParams) => {
+  private initializeAuthenticationTransaction = async (options?: AuthenticationRequestParams) => {
     const oidcConfig = await this.getConfig();
 
     this.authenticationTransaction = new AuthenticationTransaction({
       oidcConfig,
       ...options,
-      useRefreshToken: options.useRefreshToken ?? this.globalUseRefreshToken,
-      audience: options.audience ?? this.globalAudience,
-      scope: options.scope ?? this.globalScope,
+      useRefreshToken: options?.useRefreshToken ?? this.globalUseRefreshToken,
+      audience: options?.audience ?? this.globalAudience,
+      scope: options?.scope ?? this.globalScope,
       clientId: this.clientId,
     });
   };
@@ -685,18 +685,18 @@ export class IdaasClient {
 
   /**
    * Convenience method for single-factor authentication that doesn't require user input.
-   * 
+   *
    * Initiates an authentication transaction, requests a challenge, and automatically polls for completion
    * if the authentication method supports it (e.g., soft token, smart credential, and face biometric).
-   * 
+   *
    * For authentication methods that require user input, use requestChallenge and submitChallenge instead.
-   * 
+   *
    * @throws Error if the authentication method doesn't support automatic polling
    * @returns Promise that resolves with the authentication response when polling completes
    */
   public async authenticateSingle() {
     // 1. Prepare transaction
-    await this.initializeAuthenticationTransaction({});
+    await this.initializeAuthenticationTransaction();
 
     if (!this.authenticationTransaction) {
       throw new Error();
@@ -715,20 +715,20 @@ export class IdaasClient {
 
   /**
    * Convenience method for multi-factor authentication starting with a password.
-   * 
+   *
    * Initiates an authentication transaction, submits the provided password, and automatically
    * handles second factor authentication if required. If authentication is not complete after
    * password submission, it requests a new challenge and polls for completion if supported.
-   * 
+   *
    * For more control over the authentication flow, use requestChallenge and submitChallenge instead.
-   * 
+   *
    * @param password - The user's password for the first authentication factor
    * @throws Error if the authentication method doesn't support automatic polling for second factor
    * @returns Promise that resolves with the authentication response
    */
   public async authenticateMulti({ password }: { password: string }): Promise<AuthenticationResponse> {
     // 1. Prepare transaction
-    await this.initializeAuthenticationTransaction({});
+    await this.initializeAuthenticationTransaction();
 
     if (!this.authenticationTransaction) {
       throw new Error();
