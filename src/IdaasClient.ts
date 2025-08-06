@@ -47,6 +47,11 @@ export class IdaasClient {
   private authenticationTransaction?: AuthenticationTransaction;
   private config?: OidcConfig;
 
+  /**
+   * Creates a new IdaasClient instance for handling OIDC authentication flows.
+   *
+   * @param options Configuration options for the client including issuer URL, client ID, and global settings
+   */
   constructor({
     issuerUrl,
     clientId,
@@ -441,6 +446,10 @@ export class IdaasClient {
 
   //Public API
 
+  /**
+   * Provides access to IDaaS hosted OIDC methods.
+   * Contains login, logout, and handleRedirect methods.
+   */
   public get oidc() {
     return {
       login: this.login.bind(this),
@@ -497,6 +506,7 @@ export class IdaasClient {
 
   /**
    * Clear the application session and navigate to the OpenID Provider's (OP) endsession endpoint.
+   * If a redirectUri is provided, the user will be redirected to that URI after logout.
    */
   private async logout({ redirectUri }: LogoutOptions = {}): Promise<void> {
     if (!this.isAuthenticated()) {
@@ -543,6 +553,13 @@ export class IdaasClient {
     return null;
   }
 
+  /**
+   * Authenticate a user using password-based authentication.
+   * Initiates an authentication transaction with the PASSWORD method and submits the provided password.
+   * 
+   * @param options Authentication request parameters and the password to authenticate with
+   * @returns The authentication response indicating success or requiring additional steps
+   */
   public authenticatePassword = async ({
     options,
     password,
@@ -574,6 +591,13 @@ export class IdaasClient {
     return authResult;
   };
 
+  /**
+   * Initiates an authentication challenge request.
+   * Prepares a new authentication transaction and requests a challenge from the authentication provider.
+   * 
+   * @param options Optional authentication request parameters
+   * @returns The authentication response containing challenge details
+   */
   public async requestChallenge(options: AuthenticationRequestParams = {}): Promise<AuthenticationResponse> {
     // 1. Prepare transaction
     await this.initializeAuthenticationTransaction(options);
@@ -586,6 +610,13 @@ export class IdaasClient {
     return await this.authenticationTransaction.requestAuthChallenge();
   }
 
+  /**
+   * Submits a response to an authentication challenge.
+   * Processes authentication responses and completes the authentication if successful.
+   * 
+   * @param options Authentication submission parameters including credentials or response data
+   * @returns The authentication response indicating completion status or next steps
+   */
   public async submitChallenge(options: AuthenticationSubmissionParams = {}): Promise<AuthenticationResponse> {
     if (!this.authenticationTransaction) {
       throw new Error("No authentication transaction in progress!");
@@ -604,6 +635,12 @@ export class IdaasClient {
     return authenticationResponse;
   }
 
+  /**
+   * Polls the authentication provider to check for completion of an ongoing authentication process.
+   * Useful for authentication flows that may complete asynchronously (e.g., mobile push notifications).
+   * 
+   * @returns The authentication response indicating completion status
+   */
   public async pollAuth(): Promise<AuthenticationResponse> {
     if (!this.authenticationTransaction) {
       throw new Error("No authentication transaction in progress!");
@@ -617,6 +654,10 @@ export class IdaasClient {
     return authenticationResponse;
   }
 
+  /**
+   * Cancels an ongoing authentication challenge.
+   * Terminates the current authentication transaction and cleans up any pending state.
+   */
   public async cancelAuth(): Promise<void> {
     if (!this.authenticationTransaction) {
       throw new Error("No authentication transaction in progress!");
@@ -638,6 +679,11 @@ export class IdaasClient {
     return idToken.decoded as UserClaims;
   }
 
+  /**
+   * Checks if the user is currently authenticated by verifying the presence of a valid ID token.
+   * 
+   * @returns True if the user is authenticated, false otherwise
+   */
   public isAuthenticated(): boolean {
     return !!this.storageManager.getIdToken();
   }
