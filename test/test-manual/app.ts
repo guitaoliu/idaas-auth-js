@@ -12,7 +12,7 @@ const buildProject = async () => {
   console.log("🏗️ Building", baseDir);
 
   await Bun.build({
-    entrypoints: [join(baseDir, "./index.ts"), join(baseDir, "./softToken.ts")],
+    entrypoints: [join(baseDir, "./soft-token/soft-token.ts"), join(baseDir, "./grid/grid.ts")],
     outdir: outDir,
     root: baseDir,
     env: "inline",

@@ -1,27 +1,17 @@
-/** biome-ignore-all lint/suspicious/noExplicitAny: Test responses */
-import { IdaasClient } from "../../src";
-
-const CLIENT_ID = "07b9d9ad-4f46-4069-8311-76b8c24550a7";
-const ISSUER = "https://entrust-bank.us.trustedauth.com/api/oidc";
-const USERNAME = "";
-
-const initializeClient = () => {
-  console.log(`Initializing client with issuer ${ISSUER}`);
-
-  return new IdaasClient({
-    issuerUrl: ISSUER,
-    clientId: CLIENT_ID,
-    storageType: "localstorage",
-  });
-};
-
-const idaasClient: IdaasClient = initializeClient();
+import {
+  handleCancelAuth,
+  hideInputArea,
+  idaasClient,
+  showInputArea,
+  USERNAME,
+  updateChallengeUI,
+  updateSubmitUI,
+} from "../shared-utils";
 
 // Token
 document.getElementById("request-challenge-token")?.addEventListener("click", async () => {
-  console.info("Requesting token challenge");
-  hideInputArea();
-  hideResponse();
+  console.info("Requesting Soft Token challenge");
+  hideAll();
 
   try {
     const challengeResponse = await idaasClient.requestChallenge({
@@ -31,20 +21,18 @@ document.getElementById("request-challenge-token")?.addEventListener("click", as
     });
 
     console.log("Challenge response:", challengeResponse);
-
     updateChallengeUI(challengeResponse);
-
     showInputArea();
   } catch (error) {
     console.error("Request challenge failed:", error);
     updateChallengeUI(null, error);
+    throw error;
   }
 });
 
 // Token Push
 document.getElementById("request-challenge-token-push")?.addEventListener("click", async () => {
-  console.info("Requesting token push challenge");
-  hideResponse();
+  hideAll();
   try {
     const challengeResponse = await idaasClient.requestChallenge({
       userId: USERNAME,
@@ -70,8 +58,7 @@ document.getElementById("request-challenge-token-push")?.addEventListener("click
 // Token Push with Mutual Auth
 document.getElementById("request-challenge-token-push-mutual")?.addEventListener("click", async () => {
   console.info("Requesting token push with mutual auth challenge");
-  hideInputArea();
-  hideResponse();
+  hideAll();
   try {
     const challengeResponse = await idaasClient.requestChallenge({
       userId: USERNAME,
@@ -95,85 +82,48 @@ document.getElementById("request-challenge-token-push-mutual")?.addEventListener
     console.error("Polling failed:", error);
     updateSubmitUI(null, error);
   }
+  hideMutualAuthChallenge();
 });
 
 // Submit Handler
 document.getElementById("submit-response")?.addEventListener("click", async () => {
-  console.info("Submitting token response");
+  console.info("Submitting Soft Token response");
 
-  const tokenInput = document.getElementById("submit-response-input") as HTMLInputElement;
-  const tokenCode = tokenInput?.value?.trim();
+  const input = document.getElementById("submit-response-input") as HTMLInputElement;
+  const code = input?.value?.trim();
 
-  if (!tokenCode) {
+  if (!code) {
     alert("Please enter a token code");
     return;
   }
 
   try {
     const submitResponse = await idaasClient.submitChallenge({
-      response: tokenCode,
+      response: code,
     });
 
     console.log("Submit response:", submitResponse);
     updateSubmitUI(submitResponse);
-    tokenInput.value = "";
-    hideInputArea();
+    input.value = "";
+    return submitResponse;
   } catch (error) {
     console.error("Submit challenge failed:", error);
     updateSubmitUI(null, error);
   }
-});
-
-// Poll Auth handler
-document.getElementById("poll-auth")?.addEventListener("click", async () => {
-  console.info("Polling authentication status");
-
-  try {
-    const pollResponse = await idaasClient.pollAuth();
-    console.log("Poll response:", pollResponse);
-    updateSubmitUI(pollResponse);
-  } catch (error) {
-    console.error("Poll auth failed:", error);
-    updateSubmitUI(null, error);
-  }
+  hideInputArea();
+  hideMutualAuthChallenge();
 });
 
 // Cancel Auth handler
 document.getElementById("cancel-auth")?.addEventListener("click", async () => {
-  console.info("Canceling auth request");
-  hideResponse();
-  hideInputArea();
-  hideMutualAuthChallenge();
-  try {
-    await idaasClient.cancelAuth();
-    console.log("Authentication cancelled");
-    updateChallengeUI({ status: "cancelled" });
-  } catch (error) {
-    console.error("Cancel auth failed:", error);
-    updateChallengeUI(null, error);
-  }
+  await handleCancelAuth();
 });
 
-// UI Helper functions
-const showInputArea = () => {
-  const inputArea = document.getElementById("submit-input-area");
-  if (inputArea) {
-    inputArea.style.display = "block";
-  }
-};
-
-const hideInputArea = () => {
-  const inputArea = document.getElementById("submit-input-area");
-  if (inputArea) {
-    inputArea.style.display = "none";
-  }
-};
-
 const showMutualAuthChallenge = (mutualAuthCode) => {
-  const inputArea = document.getElementById("mutual-auth-challenge");
+  const codeArea = document.getElementById("mutual-auth-challenge");
   const codeElement = document.getElementById("mutual-auth-code");
-  if (inputArea) {
-    inputArea.style.display = "block";
+  if (codeArea) {
+    codeArea.style.display = "block";
   }
   if (codeElement) {
     codeElement.textContent = mutualAuthCode;
@@ -198,41 +148,16 @@ const hideResponse = () => {
   }
 };
 
-const updateChallengeUI = (response: any, error?: any) => {
-  const resultDiv = document.getElementById("request-challenge-response");
-  const outputElement = document.getElementById("challenge-output");
-
-  if (!resultDiv || !outputElement) return;
-
-  resultDiv.style.display = "block";
-
-  if (error) {
-    outputElement.textContent = `Error: ${error.message || error}`;
-    outputElement.style.color = "red";
-  } else {
-    outputElement.textContent = JSON.stringify(response, null, 2);
-    outputElement.style.color = "black";
-  }
-};
-
-const updateSubmitUI = (response: any, error?: any) => {
-  const resultDiv = document.getElementById("submit-challenge-response");
-  const outputElement = document.getElementById("submit-output");
-
-  if (!resultDiv || !outputElement) return;
-
-  resultDiv.style.display = "block";
-
-  if (error) {
-    outputElement.textContent = `Error: ${error.message || error}`;
-    outputElement.style.color = "red";
-  } else {
-    outputElement.textContent = JSON.stringify(response, null, 2);
-    outputElement.style.color = "black";
-  }
-
+const hideAll = () => {
+  hideInputArea();
   hideMutualAuthChallenge();
+  hideResponse();
 };
+
+// Back button
+document.getElementById("back-button")?.addEventListener("click", async () => {
+  window.location.href = "../index.html";
+});
 
 window.addEventListener("load", async () => {
   console.log("Soft token page loaded");
