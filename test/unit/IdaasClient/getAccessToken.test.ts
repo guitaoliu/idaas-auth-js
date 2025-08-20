@@ -27,14 +27,14 @@ describe("IdaasClient.getAccessToken", () => {
     jest.clearAllMocks();
   });
 
-  // @ts-ignore private
+  // @ts-expect-error private
   const spyOnPersistenceGetAccessTokens = spyOn(NO_DEFAULT_IDAAS_CLIENT.storageManager, "getAccessTokens");
-  // @ts-ignore private
+  // @ts-expect-error private
   const spyOnRemoveUnusableTokens = spyOn(NO_DEFAULT_IDAAS_CLIENT, "removeUnusableTokens");
-  // @ts-ignore not full type
+  // @ts-expect-error not full type
   const spyOnFetch = spyOn(window, "fetch").mockImplementation(mockFetch);
   const storeToken = (token: AccessToken) => {
-    // @ts-ignore private method call
+    // @ts-expect-error private method call
     NO_DEFAULT_IDAAS_CLIENT.storageManager.saveAccessToken(token);
   };
 
@@ -335,7 +335,7 @@ describe("IdaasClient.getAccessToken", () => {
       storeToken({ ...TEST_ACCESS_TOKEN_OBJECT, maxAgeExpiry: 1 });
       await NO_DEFAULT_IDAAS_CLIENT.getAccessToken({ fallbackAuthorizationOptions: {} });
 
-      // @ts-ignore private
+      // @ts-expect-error private
       expect(NO_DEFAULT_IDAAS_CLIENT.storageManager.getAccessTokens()).toStrictEqual([]);
     });
 
@@ -343,7 +343,7 @@ describe("IdaasClient.getAccessToken", () => {
       storeToken(TEST_ACCESS_TOKEN_OBJECT);
       await NO_DEFAULT_IDAAS_CLIENT.getAccessToken({ fallbackAuthorizationOptions: {} });
 
-      // @ts-ignore private
+      // @ts-expect-error private
       expect(NO_DEFAULT_IDAAS_CLIENT.storageManager.getAccessTokens()).toStrictEqual([TEST_ACCESS_TOKEN_OBJECT]);
     });
 

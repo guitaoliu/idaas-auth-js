@@ -20,15 +20,15 @@ import {
 import { getUrlParams, mockFetch } from "../helpers";
 
 describe("IdaasClient.login", () => {
-  // @ts-ignore not full type
+  // @ts-expect-error not full type
   const _spyOnFetch = spyOn(window, "fetch").mockImplementation(mockFetch);
-  // @ts-ignore private method
+  // @ts-expect-error private method
   const spyOnLoginWithRedirect = spyOn(NO_DEFAULT_IDAAS_CLIENT, "loginWithRedirect");
-  // @ts-ignore private method
+  // @ts-expect-error private method
   const spyOnLoginWithPopup = spyOn(NO_DEFAULT_IDAAS_CLIENT, "loginWithPopup");
-  // @ts-ignore private method
+  // @ts-expect-error private method
   const spyOnGetConfig = spyOn(NO_DEFAULT_IDAAS_CLIENT, "getConfig");
-  // @ts-ignore private method
+  // @ts-expect-error private method
   const spyOnGenerateAuthorizationUrl = spyOn(NO_DEFAULT_IDAAS_CLIENT, "generateAuthorizationUrl");
   const startLocation = TEST_BASE_URI;
 
@@ -49,7 +49,7 @@ describe("IdaasClient.login", () => {
   });
 
   test("throws error if attempting to login with popup, but web_message response mode not supported", () => {
-    // @ts-ignore not assignable to parameter type 'never'
+    // @ts-expect-error not assignable to parameter type 'never'
     spyOnGetConfig.mockResolvedValueOnce({ ...TEST_OIDC_CONFIG, response_modes_supported: ["query"] });
 
     expect(async () => {
@@ -147,7 +147,7 @@ describe("IdaasClient.login", () => {
       });
 
       test("scope supplied in constructor used if not specified in login call", async () => {
-        // @ts-ignore private method
+        // @ts-expect-error private method
         const spyOnGenerateAuthorizationUrl = spyOn(SET_DEFAULTS_IDAAS_CLIENT, "generateAuthorizationUrl");
 
         await SET_DEFAULTS_IDAAS_CLIENT.login();
@@ -238,7 +238,7 @@ describe("IdaasClient.login", () => {
     });
 
     test("redirects to the url provided by generateAuthorizationUrl", async () => {
-      // @ts-ignore same as all other .mockResolvedValue issues
+      // @ts-expect-error same as all other .mockResolvedValue issues
       spyOnGenerateAuthorizationUrl.mockResolvedValueOnce({ url: TEST_REDIRECT_URI });
 
       await NO_DEFAULT_IDAAS_CLIENT.login();
@@ -249,7 +249,7 @@ describe("IdaasClient.login", () => {
   });
 
   describe("login with popup", () => {
-    // @ts-ignore wrong return type
+    // @ts-expect-error wrong return type
     spyOn(browser, "openPopup").mockImplementation(() => "test");
     spyOn(browser, "listenToAuthorizePopup").mockResolvedValue(TEST_AUTH_RESPONSE);
     spyOn(jwt, "validateIdToken").mockImplementation(() => {
@@ -260,9 +260,9 @@ describe("IdaasClient.login", () => {
       NO_DEFAULT_IDAAS_CLIENT, // @ts-ignore private method
       "validateAuthorizeResponse",
     ).mockImplementation((object) => object.code);
-    // @ts-ignore private method
+    // @ts-expect-error private method
     const spyOnRequestAndValidateTokens = spyOn(NO_DEFAULT_IDAAS_CLIENT, "requestAndValidateTokens");
-    // @ts-ignore private method
+    // @ts-expect-error private method
     const spyOnParseAndSaveTokenResponse = spyOn(NO_DEFAULT_IDAAS_CLIENT, "parseAndSaveTokenResponse");
 
     test("generateAuthorizationUrl is called", async () => {

@@ -17,19 +17,19 @@ import {
 import { mockFetch, storeData } from "../helpers";
 
 describe("IdaasClient.handleRedirect", () => {
-  // @ts-ignore not full type
+  // @ts-expect-error not full type
   const spyOnFetch = spyOn(window, "fetch").mockImplementation(mockFetch);
-  // @ts-ignore private method
+  // @ts-expect-error private method
   const spyOnParseRedirect = spyOn(NO_DEFAULT_IDAAS_CLIENT, "parseRedirect");
-  // @ts-ignore private method
+  // @ts-expect-error private method
   const spyOnParseLoginRedirect = spyOn(NO_DEFAULT_IDAAS_CLIENT, "parseLoginRedirect");
-  // @ts-ignore private method
+  // @ts-expect-error private method
   const spyOnRequestAndValidateTokens = spyOn(NO_DEFAULT_IDAAS_CLIENT, "requestAndValidateTokens");
-  // @ts-ignore private method
+  // @ts-expect-error private method
   const spyOnValidateAuthorizeResponse = spyOn(NO_DEFAULT_IDAAS_CLIENT, "validateAuthorizeResponse");
-  // @ts-ignore private method
+  // @ts-expect-error private method
   const spyOnParseAndSaveTokenResponse = spyOn(NO_DEFAULT_IDAAS_CLIENT, "parseAndSaveTokenResponse");
-  // @ts-ignore private method
+  // @ts-expect-error private method
   const spyOnCalculateEpochExpiry = spyOn(format, "calculateEpochExpiry");
   const spyOnValidateIdToken = spyOn(jwt, "validateIdToken").mockImplementation(() => {
     return { decodedJwt: TEST_ID_TOKEN_OBJECT.decoded, idToken: TEST_ID_TOKEN_OBJECT.encoded };
@@ -133,21 +133,21 @@ describe("IdaasClient.handleRedirect", () => {
     describe("validateAuthorizeResponse", () => {
       test("throws error if error present in search params", () => {
         expect(() => {
-          // @ts-ignore private method
+          // @ts-expect-error private method
           NO_DEFAULT_IDAAS_CLIENT.validateAuthorizeResponse({ ...TEST_AUTH_RESPONSE, error: "error" }, "testingstate");
         }).toThrowError();
       });
 
       test("throws error if state not present in search params", () => {
         expect(() => {
-          // @ts-ignore private method
+          // @ts-expect-error private method
           NO_DEFAULT_IDAAS_CLIENT.validateAuthorizeResponse({ ...TEST_AUTH_RESPONSE, state: null }, "testingstate");
         }).toThrowError();
       });
 
       test("throws error if code not present in search params", () => {
         expect(() => {
-          // @ts-ignore private method
+          // @ts-expect-error private method
           NO_DEFAULT_IDAAS_CLIENT.validateAuthorizeResponse({ ...TEST_AUTH_RESPONSE, code: null }, "testingstate");
         }).toThrowError();
       });
@@ -280,7 +280,7 @@ describe("IdaasClient.handleRedirect", () => {
         window.location.href = loginSuccessUrl;
 
         await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
-        // @ts-ignore accessing private var
+        // @ts-expect-error accessing private var
         const storedToken = NO_DEFAULT_IDAAS_CLIENT.storageManager.getAccessTokens()[0];
         const validatedTokenResponse = spyOnParseAndSaveTokenResponse.mock.calls[0][0] as ValidatedTokenResponse;
         const { tokenResponse } = validatedTokenResponse;
@@ -297,7 +297,7 @@ describe("IdaasClient.handleRedirect", () => {
         window.location.href = loginSuccessUrl;
 
         await NO_DEFAULT_IDAAS_CLIENT.handleRedirect();
-        // @ts-ignore accessing private var
+        // @ts-expect-error accessing private var
         const storedToken = NO_DEFAULT_IDAAS_CLIENT.storageManager.getIdToken();
         const validatedTokenResponse = spyOnParseAndSaveTokenResponse.mock.calls[0][0] as ValidatedTokenResponse;
         const { decodedIdToken, encodedIdToken } = validatedTokenResponse;

@@ -3,11 +3,11 @@ import { NO_DEFAULT_IDAAS_CLIENT, TEST_BASE_URI, TEST_CLIENT_ID } from "../const
 import { getUrlParams, mockFetch, storeData } from "../helpers";
 
 describe("IdaasClient.logout", () => {
-  // @ts-ignore not full type
+  // @ts-expect-error not full type
   const _spyOnFetch = spyOn(window, "fetch").mockImplementation(mockFetch);
-  // @ts-ignore private method
+  // @ts-expect-error private method
   const spyOnGetConfig = spyOn(NO_DEFAULT_IDAAS_CLIENT, "getConfig");
-  // @ts-ignore private method
+  // @ts-expect-error private method
   const spyOnGenerateLogoutUrl = spyOn(NO_DEFAULT_IDAAS_CLIENT, "generateLogoutUrl");
   const startLocation = window.location.href;
 

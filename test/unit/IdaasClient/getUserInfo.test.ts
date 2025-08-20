@@ -5,9 +5,9 @@ import { NO_DEFAULT_IDAAS_CLIENT, TEST_ACCESS_TOKEN, TEST_BASE_URI, TEST_ID_PAIR
 import { mockFetch } from "../helpers";
 
 describe("IdaasClient.getUserInfo", () => {
-  // @ts-ignore not full type
+  // @ts-expect-error not full type
   const spyOnFetch = spyOn(window, "fetch").mockImplementation(mockFetch);
-  // @ts-ignore accessing private var
+  // @ts-expect-error accessing private var
   const spyOnGetIdToken = spyOn(NO_DEFAULT_IDAAS_CLIENT.storageManager, "getIdToken");
 
   afterAll(() => {

@@ -154,7 +154,7 @@ describe("jwt.ts", () => {
 
     test("returns the JWT payload if no errors raised from jwtVerify", async () => {
       const _spyOnJwtVerify = spyOn(jose, "jwtVerify").mockImplementationOnce(
-        // @ts-ignore not full return type
+        // @ts-expect-error not full return type
         async (userInfoToken) => ({ payload: jose.decodeJwt(userInfoToken) }),
       );
 
