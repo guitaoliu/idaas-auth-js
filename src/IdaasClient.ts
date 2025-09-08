@@ -19,6 +19,7 @@ import type {
   IdaasClientOptions,
   LogoutOptions,
   OidcLoginOptions,
+  TokenOptions,
   UserClaims,
 } from "./models";
 import { type AccessToken, StorageManager } from "./storage/StorageManager";
@@ -325,15 +326,18 @@ export class IdaasClient {
     return this.config ? this.config : await fetchOpenidConfiguration(this.issuerUrl);
   }
 
-  private initializeAuthenticationTransaction = async (options?: AuthenticationRequestParams) => {
+  private initializeAuthenticationTransaction = async (
+    options?: AuthenticationRequestParams,
+    tokenOptions?: TokenOptions,
+  ) => {
     const oidcConfig = await this.getConfig();
 
     this.authenticationTransaction = new AuthenticationTransaction({
       oidcConfig,
       ...options,
-      useRefreshToken: options?.useRefreshToken ?? this.globalUseRefreshToken,
-      audience: options?.audience ?? this.globalAudience,
-      scope: options?.scope ?? this.globalScope,
+      useRefreshToken: tokenOptions?.useRefreshToken ?? this.globalUseRefreshToken,
+      audience: tokenOptions?.audience ?? this.globalAudience,
+      scope: tokenOptions?.scope ?? this.globalScope,
       clientId: this.clientId,
     });
   };
@@ -378,7 +382,7 @@ export class IdaasClient {
     useRefreshToken,
     acrValues,
     maxAge,
-  }: OidcLoginOptions): Promise<string | null> {
+  }: OidcLoginOptions & TokenOptions): Promise<string | null> {
     const finalRedirectUri = redirectUri ?? sanitizeUri(window.location.href);
 
     const { url, nonce, state, codeVerifier } = await this.generateAuthorizationUrl(
@@ -422,7 +426,7 @@ export class IdaasClient {
     useRefreshToken,
     acrValues,
     maxAge,
-  }: OidcLoginOptions): Promise<void> {
+  }: OidcLoginOptions & TokenOptions): Promise<void> {
     const finalRedirectUri = redirectUri ?? sanitizeUri(window.location.href);
     const { url, nonce, state, codeVerifier } = await this.generateAuthorizationUrl(
       "query",
@@ -473,7 +477,7 @@ export class IdaasClient {
     popup = false,
     acrValues,
     maxAge,
-  }: OidcLoginOptions = {}): Promise<string | null> {
+  }: OidcLoginOptions & TokenOptions = {}): Promise<string | null> {
     if (popup) {
       const popupWindow = openPopup("");
       const { response_modes_supported } = await this.getConfig();
@@ -598,9 +602,12 @@ export class IdaasClient {
    * @param options Optional authentication request parameters
    * @returns The authentication response containing challenge details
    */
-  public async requestChallenge(options: AuthenticationRequestParams = {}): Promise<AuthenticationResponse> {
+  public async requestChallenge(
+    options: AuthenticationRequestParams = {},
+    tokenOptions?: TokenOptions,
+  ): Promise<AuthenticationResponse> {
     // 1. Prepare transaction
-    await this.initializeAuthenticationTransaction(options);
+    await this.initializeAuthenticationTransaction(options, tokenOptions);
 
     if (!this.authenticationTransaction) {
       throw new Error();

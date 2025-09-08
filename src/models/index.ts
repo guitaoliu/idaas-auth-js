@@ -54,7 +54,7 @@ export interface IdaasClientOptions {
 /**
  * The configurable options for the `login` and `requestChallenge` methods.
  */
-interface BaseLoginOptions {
+export interface TokenOptions {
   /**
    * The audience to be used for requesting API access. This defaults to the `globalAudience` set in your `IdaasClientOptions` if not set.
    */
@@ -77,15 +77,21 @@ interface BaseLoginOptions {
   useRefreshToken?: boolean;
 
   /**
-   * Specifies the maximum age of a token, this value does not change on token refresh.
+   * Specifies the maximum age of a token in seconds.
+   * When tokens are refreshed using a refresh token, the original authentication time is preserved and this maxAge value continues to apply to that original authentication timestamp, not the refresh time.
    */
   maxAge?: number;
+
+  /**
+   * Determines the strength/quality of the method used to authenticate the user.
+   */
+  acrValues?: string[];
 }
 
 /**
  * The configurable options specific to the OIDC `login` method.
  */
-export interface OidcLoginOptions extends BaseLoginOptions {
+export interface OidcLoginOptions {
   /**
    * The URI to be redirected to after a successful login. The default value is the current page.
    * This URI must be included in the `Login Redirect URI(s)` field in your IDaaS client application settings.
@@ -97,11 +103,6 @@ export interface OidcLoginOptions extends BaseLoginOptions {
    * The default setting is `false`.
    */
   popup?: boolean;
-
-  /**
-   * Determines the strength/quality of the method used to authenticate the user.
-   */
-  acrValues?: string[];
 }
 
 /**
@@ -237,11 +238,16 @@ export interface TokenPushOptions extends MutualChallenge {}
 /**
  * The configurable options when requesting an authentication challenge.
  */
-export interface AuthenticationRequestParams extends BaseLoginOptions {
+export interface AuthenticationRequestParams {
   /**
    * The user ID of the user to request the challenge for.
    */
   userId?: string;
+
+  /**
+   * The user's password to submit for MFA flows.
+   */
+  password?: string;
 
   /**
    * The preferred method of authentication.
@@ -252,11 +258,6 @@ export interface AuthenticationRequestParams extends BaseLoginOptions {
    * Determines if the preferred authentication method must be used.
    */
   strict?: boolean;
-
-  /**
-   * Determines the strength/quality of the method used to authenticate the user.
-   */
-  acrValues?: string[];
 
   /**
    * Options available during TOKENPUSH authentication

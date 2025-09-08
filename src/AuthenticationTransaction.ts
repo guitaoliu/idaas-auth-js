@@ -15,6 +15,7 @@ import type {
   FaceBiometricOptions,
   IdaasAuthenticationMethod,
   PublicKeyCredentialRequestOptionsJSON,
+  TokenOptions,
   TokenPushOptions,
 } from "./models";
 import type {
@@ -70,7 +71,7 @@ export class AuthenticationTransaction {
   private readonly preferredAuthenticationMethod?: IdaasAuthenticationMethod;
   private readonly transactionDetails?: TransactionDetail[];
   private readonly acrValues?: string[];
-
+  private readonly password?: string;
   private authenticationDetails: AuthenticationDetails;
   private continuePolling = false;
   private isSecondFactor = false;
@@ -94,11 +95,12 @@ export class AuthenticationTransaction {
     strict,
     faceBiometricOptions,
     tokenPushOptions,
+    password,
     audience,
     maxAge,
     transactionDetails,
     acrValues,
-  }: AuthenticationTransactionOptions) {
+  }: AuthenticationTransactionOptions & TokenOptions) {
     const { issuer } = oidcConfig;
 
     this.authenticationDetails = {
@@ -121,6 +123,7 @@ export class AuthenticationTransaction {
     this.useRefreshToken = useRefreshToken ?? false;
     this.userId = userId ?? "";
     this.acrValues = acrValues;
+    this.password = password;
   }
 
   private async handlePasskeyLogin(): Promise<void> {
@@ -199,6 +202,14 @@ export class AuthenticationTransaction {
     this.fidoChallenge = fidoChallenge;
     this.faceChallenge = faceChallenge;
     this.kbaChallenge = kbaChallenge;
+
+    if (method === "PASSWORD_AND_SECONDFACTOR" && this.password) {
+      await this.submitAuthChallenge({
+        response: this.password,
+      });
+
+      return await this.prepareForSecondFactorSubmission();
+    }
 
     if (method === "PASSKEY" || method === "FIDO") {
       await this.handlePasskeyLogin();
@@ -464,7 +475,7 @@ export class AuthenticationTransaction {
     this.kbaChallenge = kbaChallenge;
     this.token = secondFactorToken;
 
-    if (secondFactor === "FIDO") {
+    if (secondFactor === "FIDO" || secondFactor === "PASSKEY") {
       await this.handlePasskeyLogin();
     }
 
@@ -472,6 +483,7 @@ export class AuthenticationTransaction {
     return {
       ...secondFactorRequest,
       secondFactorMethod: secondFactor,
+      publicKeyCredentialRequestOptions: this.publicKeyCredentialRequestOptions,
       pollForCompletion,
       method,
     };
