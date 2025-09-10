@@ -33,7 +33,7 @@ document.getElementById("request-challenge-password")?.addEventListener("click",
     console.log("Challenge response:", challengeResponse);
     updateChallengeUI(challengeResponse);
     if (challengeResponse.pollForCompletion) {
-      submitResponse = await idaasClient.pollAuth();
+      submitResponse = await idaasClient.poll();
       updateSubmitUI(submitResponse);
     } else if (challengeResponse.secondFactorMethod === "PASSKEY" || challengeResponse.secondFactorMethod === "FIDO") {
       const credential = await navigator.credentials.get({
@@ -124,7 +124,7 @@ document.getElementById("submit-password-response")?.addEventListener("click", a
     console.log("Submit response:", submitResponse);
     updateSubmitUI(submitResponse);
     if (submitResponse.pollForCompletion) {
-      submitResponse = await idaasClient.pollAuth();
+      submitResponse = await idaasClient.poll();
       updateSubmitUI(submitResponse);
     } else if (submitResponse.secondFactorMethod === "PASSKEY" || submitResponse.secondFactorMethod === "FIDO") {
       const credential = await navigator.credentials.get({
