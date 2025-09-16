@@ -4,11 +4,14 @@ export type {
   AuthenticationRequestParams,
   AuthenticationResponse,
   AuthenticationSubmissionParams,
+  FaceBiometricOptions,
+  FallbackAuthorizationOptions,
   GetAccessTokenOptions,
   IdaasAuthenticationMethod,
   IdaasClientOptions,
   LogoutOptions,
   OidcLoginOptions,
+  TokenPushOptions,
   UserClaims,
 } from "./models";
 
