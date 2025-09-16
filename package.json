@@ -53,7 +53,7 @@
     "@happy-dom/global-registrator": "18.0.1",
     "@hey-api/client-fetch": "0.13.1",
     "@hey-api/openapi-ts": "0.83.1",
-    "@microsoft/api-extractor": "7.52.12",
+    "@microsoft/api-extractor": "7.52.13",
     "@playwright/test": "1.55.0",
     "@rsbuild/plugin-type-check": "1.2.4",
     "@rslib/core": "0.13.2",
