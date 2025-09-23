@@ -2,14 +2,9 @@ import type { AuthenticationRequestParams, AuthenticationResponse } from "./mode
 import type { RbaClient } from "./RbaClient";
 
 /**
- * This class handles authorization for OIDC flows using both popup
- * and redirect authentication patterns. It manages the entire OIDC ceremony
- * including authorization URL generation, token exchange, validation, and processing
- * redirect callbacks.
+ * This class handles convenience authorization methods such as password-based authentication.
  *
- * Contains three main methods: login, logout, and handleRedirect.
  */
-
 export class AuthClient {
   private rbaClient: RbaClient;
 
