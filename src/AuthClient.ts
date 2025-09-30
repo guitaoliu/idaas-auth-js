@@ -27,26 +27,13 @@ export class AuthClient {
     password: string;
   }): Promise<AuthenticationResponse> {
     // 1. Prepare transaction with PASSWORD method
-    await this.rbaClient.initializeAuthenticationTransaction({
+    await this.rbaClient.requestChallenge({
       ...options,
       strict: true,
       preferredAuthenticationMethod: "PASSWORD",
     });
 
-    if (!this.rbaClient.authenticationTransaction) {
-      throw new Error("Failed to initialize authentication transaction");
-    }
-
-    // 2. Request authentication challenge
-    await this.rbaClient.authenticationTransaction.requestAuthChallenge();
-
-    // 3. Submit authentication challenge response
-    const authResult = await this.rbaClient.authenticationTransaction.submitAuthChallenge({ response: password });
-
-    if (authResult.authenticationCompleted) {
-      this.rbaClient.handleAuthenticationTransactionSuccess();
-    }
-
+    const authResult = await this.rbaClient.submitChallenge({ response: password });
     return authResult;
   }
 }
