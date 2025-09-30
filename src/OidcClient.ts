@@ -2,11 +2,11 @@ import { type AccessTokenRequest, requestToken } from "./api";
 import type { ValidatedTokenResponse } from "./IdaasClient";
 import type { IdaasContext } from "./IdaasContext";
 import type { AuthorizeResponse, LogoutOptions, OidcLoginOptions, TokenOptions } from "./models";
-import type { AccessToken, StorageManager } from "./storage/StorageManager";
+import type { AccessToken, StorageManager, TokenParams } from "./storage/StorageManager";
 import { listenToAuthorizePopup, openPopup } from "./utils/browser";
-import { base64UrlStringEncode, createRandomString, generateChallengeVerifierPair } from "./utils/crypto";
 import { calculateEpochExpiry, formatUrl, sanitizeUri } from "./utils/format";
 import { readAccessToken, validateIdToken } from "./utils/jwt";
+import { generateAuthorizationUrl } from "./utils/url";
 
 /**
  * This class handles authorization for OIDC flows using both popup
@@ -42,7 +42,7 @@ export class OidcClient {
     useRefreshToken = false,
     popup = false,
     acrValues,
-    maxAge,
+    maxAge = -1,
   }: OidcLoginOptions & TokenOptions = {}): Promise<string | null> {
     if (popup) {
       const popupWindow = openPopup("");
@@ -262,72 +262,6 @@ export class OidcClient {
   }
 
   /**
-   * Generate the authorization url by generating searchParams. codeVerifier will need to be stored for use after redirect.
-   */
-  private async generateAuthorizationUrl(
-    responseMode: "query" | "web_message",
-    redirectUri: string = window.location.href,
-    refreshToken: boolean = this.context.globalUseRefreshToken,
-    scope: string = this.context.globalScope,
-    audience: string | undefined = this.context.globalAudience,
-    acrValues: string[] = [],
-    maxAge = -1,
-  ): Promise<{
-    url: string;
-    nonce: string;
-    state: string;
-    codeVerifier: string;
-  }> {
-    const { authorization_endpoint } = await this.context.getConfig();
-    const scopeAsArray = scope.split(" ");
-
-    scopeAsArray.push("openid");
-    if (refreshToken) {
-      scopeAsArray.push("offline_access");
-    }
-
-    // removes duplicate values
-    const usedScope = [...new Set(scopeAsArray)].join(" ");
-
-    const state = base64UrlStringEncode(createRandomString());
-    const nonce = base64UrlStringEncode(createRandomString());
-    const { codeVerifier, codeChallenge } = await generateChallengeVerifierPair();
-    const url = new URL(authorization_endpoint);
-    url.searchParams.append("response_type", "code");
-    url.searchParams.append("client_id", this.context.clientId);
-    url.searchParams.append("redirect_uri", redirectUri);
-    if (audience) {
-      url.searchParams.append("audience", audience);
-    }
-    url.searchParams.append("scope", usedScope);
-    url.searchParams.append("state", state);
-    url.searchParams.append("nonce", nonce);
-    url.searchParams.append("response_mode", responseMode);
-    url.searchParams.append("code_challenge", codeChallenge);
-    // Note: The PKCE spec defines an additional code_challenge_method 'plain', but it is explicitly NOT recommended
-    // https://datatracker.ietf.org/doc/html/rfc7636#section-7.2
-    url.searchParams.append("code_challenge_method", "S256");
-
-    if (maxAge >= 0) {
-      url.searchParams.append("max_age", maxAge.toString());
-      this.storageManager.saveTokenParams({
-        audience,
-        scope: usedScope,
-        maxAge,
-      });
-    } else {
-      this.storageManager.saveTokenParams({ audience, scope: usedScope });
-    }
-
-    if (acrValues.length > 0) {
-      const acrString = acrValues.join(" ");
-      url.searchParams.append("acr_values", acrString);
-    }
-
-    return { url: url.toString(), nonce, state, codeVerifier };
-  }
-
-  /**
    * Perform the authorization code flow using a new popup window at the OpenID Provider (OP) to authenticate the user.
    */
   private async loginWithPopup({
@@ -340,15 +274,31 @@ export class OidcClient {
   }: OidcLoginOptions & TokenOptions): Promise<string | null> {
     const finalRedirectUri = redirectUri ?? sanitizeUri(window.location.href);
 
-    const { url, nonce, state, codeVerifier } = await this.generateAuthorizationUrl(
-      "web_message",
-      finalRedirectUri,
-      useRefreshToken,
-      scope,
-      audience,
-      acrValues,
-      maxAge,
+    const { url, nonce, state, codeVerifier, usedScope } = await generateAuthorizationUrl(
+      await this.context.getConfig(),
+      {
+        type: "standard",
+        clientId: this.context.clientId,
+        responseMode: "web_message",
+        redirectUri: finalRedirectUri,
+        useRefreshToken: useRefreshToken ?? this.context.globalUseRefreshToken,
+        scope: scope ?? this.context.globalScope,
+        audience: audience ?? this.context.globalAudience,
+        acrValues,
+        maxAge,
+      },
     );
+
+    const tokenParams: { audience?: string; scope: string; maxAge?: number } = {
+      audience: audience ?? this.context.globalAudience,
+      scope: usedScope,
+    };
+
+    if (maxAge && maxAge >= 0) {
+      tokenParams.maxAge = maxAge;
+    }
+
+    this.storageManager.saveTokenParams(tokenParams);
 
     const popup = openPopup(url);
     const authorizeResponse = await listenToAuthorizePopup(popup, url);
@@ -383,15 +333,31 @@ export class OidcClient {
     maxAge,
   }: OidcLoginOptions & TokenOptions): Promise<void> {
     const finalRedirectUri = redirectUri ?? sanitizeUri(window.location.href);
-    const { url, nonce, state, codeVerifier } = await this.generateAuthorizationUrl(
-      "query",
-      finalRedirectUri,
-      useRefreshToken,
-      scope,
-      audience,
-      acrValues,
-      maxAge,
+    const { url, nonce, state, codeVerifier, usedScope } = await generateAuthorizationUrl(
+      await this.context.getConfig(),
+      {
+        type: "standard",
+        clientId: this.context.clientId,
+        responseMode: "query",
+        redirectUri: finalRedirectUri,
+        useRefreshToken: useRefreshToken ?? this.context.globalUseRefreshToken,
+        scope: scope ?? this.context.globalScope,
+        audience: audience ?? this.context.globalAudience,
+        acrValues,
+        maxAge,
+      },
     );
+
+    const tokenParams: TokenParams = {
+      audience: audience ?? this.context.globalAudience,
+      scope: usedScope,
+    };
+
+    if (maxAge && maxAge >= 0) {
+      tokenParams.maxAge = maxAge;
+    }
+
+    this.storageManager.saveTokenParams(tokenParams);
 
     this.storageManager.saveClientParams({
       nonce,

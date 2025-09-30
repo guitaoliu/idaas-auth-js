@@ -111,17 +111,19 @@ export class RbaClient {
   // PRIVATE METHODS
   /** @internal */
   public initializeAuthenticationTransaction = async (
-    options?: AuthenticationRequestParams,
+    authenticationRequestParams?: AuthenticationRequestParams,
     tokenOptions?: TokenOptions,
   ) => {
     const oidcConfig = await this.context.getConfig();
 
     this.authenticationTransaction = new AuthenticationTransaction({
       oidcConfig,
-      ...options,
+      authenticationRequestParams,
       useRefreshToken: tokenOptions?.useRefreshToken ?? this.context.globalUseRefreshToken,
-      audience: tokenOptions?.audience ?? this.context.globalAudience,
-      scope: tokenOptions?.scope ?? this.context.globalScope,
+      tokenOptions: {
+        audience: tokenOptions?.audience ?? this.context.globalAudience,
+        scope: tokenOptions?.scope ?? this.context.globalScope,
+      },
       clientId: this.context.clientId,
     });
   };

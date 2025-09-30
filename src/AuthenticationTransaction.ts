@@ -9,14 +9,13 @@ import {
 } from "./api";
 import type {
   AuthenticationCredential,
+  AuthenticationRequestParams,
   AuthenticationResponse,
   AuthenticationSubmissionParams,
   AuthenticationTransactionOptions,
-  FaceBiometricOptions,
   IdaasAuthenticationMethod,
   PublicKeyCredentialRequestOptionsJSON,
   TokenOptions,
-  TokenPushOptions,
 } from "./models";
 import type {
   AuthenticatedResponse,
@@ -24,19 +23,18 @@ import type {
   FidoChallenge,
   FidoResponse,
   KbaChallenge,
-  TransactionDetail,
   UserAuthenticateParameters,
   UserAuthenticateQueryResponse,
   UserChallengeParameters,
 } from "./models/openapi-ts";
 import { browserSupportsPasskey } from "./utils/browser";
-import { base64UrlStringEncode, createRandomString, generateChallengeVerifierPair } from "./utils/crypto";
 import {
   base64URLStringToBuffer,
   bufferToBase64URLString,
   calculateEpochExpiry,
   toPublicKeyCredentialDescriptor,
 } from "./utils/format";
+import { generateAuthorizationUrl } from "./utils/url";
 
 export interface AuthenticationDetails {
   method?: IdaasAuthenticationMethod;
@@ -57,21 +55,13 @@ interface RequiredDetails {
 }
 
 export class AuthenticationTransaction {
+  private readonly authenticationRequestParams?: AuthenticationRequestParams;
   private readonly clientId: string;
   private readonly issuerOrigin: string;
-  private readonly faceBiometricOptions: FaceBiometricOptions;
-  private readonly tokenPushOptions: TokenPushOptions;
   private readonly oidcConfig: OidcConfig;
-  private readonly strict: boolean;
   private readonly useRefreshToken: boolean;
-  private readonly userId: string;
+  private readonly tokenOptions: TokenOptions;
 
-  private readonly audience?: string;
-  private readonly maxAge?: number;
-  private readonly preferredAuthenticationMethod?: IdaasAuthenticationMethod;
-  private readonly transactionDetails?: TransactionDetail[];
-  private readonly acrValues?: string[];
-  private readonly password?: string;
   private authenticationDetails: AuthenticationDetails;
   private continuePolling = false;
   private isSecondFactor = false;
@@ -87,43 +77,22 @@ export class AuthenticationTransaction {
 
   constructor({
     oidcConfig,
-    userId,
-    scope,
+    tokenOptions,
     useRefreshToken,
     clientId,
-    preferredAuthenticationMethod,
-    strict,
-    faceBiometricOptions,
-    tokenPushOptions,
-    password,
-    audience,
-    maxAge,
-    transactionDetails,
-    acrValues,
-  }: AuthenticationTransactionOptions & TokenOptions) {
+    authenticationRequestParams,
+  }: AuthenticationTransactionOptions) {
     const { issuer } = oidcConfig;
 
     this.authenticationDetails = {
-      scope,
+      scope: tokenOptions.scope,
     };
-    this.audience = audience;
+    this.tokenOptions = tokenOptions;
     this.clientId = clientId;
     this.issuerOrigin = new URL(issuer).origin;
-    this.maxAge = maxAge;
-    this.tokenPushOptions = {
-      mutualChallengeEnabled: tokenPushOptions?.mutualChallengeEnabled ?? false,
-    };
-    this.faceBiometricOptions = {
-      mutualChallengeEnabled: faceBiometricOptions?.mutualChallengeEnabled ?? false,
-    };
+    this.authenticationRequestParams = authenticationRequestParams;
     this.oidcConfig = oidcConfig;
-    this.preferredAuthenticationMethod = preferredAuthenticationMethod;
-    this.strict = strict ?? false;
-    this.transactionDetails = transactionDetails;
     this.useRefreshToken = useRefreshToken ?? false;
-    this.userId = userId ?? "";
-    this.acrValues = acrValues;
-    this.password = password;
   }
 
   private async handlePasskeyLogin(): Promise<void> {
@@ -170,7 +139,16 @@ export class AuthenticationTransaction {
    */
   public async requestAuthChallenge(): Promise<AuthenticationResponse> {
     // 1. Generate /authorizejwt URL and fetch OIDC details
-    const { url, codeVerifier } = await this.generateJwtAuthorizeUrl();
+    const { url, codeVerifier } = await generateAuthorizationUrl(this.oidcConfig, {
+      clientId: this.clientId,
+      audience: this.tokenOptions.audience,
+      maxAge: this.tokenOptions.maxAge,
+      acrValues: this.tokenOptions.acrValues,
+      scope: this.authenticationDetails.scope,
+      useRefreshToken: this.useRefreshToken,
+      type: "jwt",
+    });
+
     const { authRequestKey, applicationId } = await getAuthRequestId(url);
 
     this.requiredDetails = {
@@ -203,9 +181,9 @@ export class AuthenticationTransaction {
     this.faceChallenge = faceChallenge;
     this.kbaChallenge = kbaChallenge;
 
-    if (method === "PASSWORD_AND_SECONDFACTOR" && this.password) {
+    if (method === "PASSWORD_AND_SECONDFACTOR" && this.authenticationRequestParams?.password) {
       await this.submitAuthChallenge({
-        response: this.password,
+        response: this.authenticationRequestParams.password,
       });
 
       return await this.prepareForSecondFactorSubmission();
@@ -222,51 +200,8 @@ export class AuthenticationTransaction {
       publicKeyCredentialRequestOptions: this.publicKeyCredentialRequestOptions,
       pollForCompletion,
       method,
-      userId: this.userId,
+      userId: this.authenticationRequestParams?.userId,
     };
-  }
-
-  private async generateJwtAuthorizeUrl() {
-    const url = new URL(`${this.oidcConfig.issuer}/authorizejwt`);
-    const { codeVerifier, codeChallenge } = await generateChallengeVerifierPair();
-    const state = base64UrlStringEncode(createRandomString());
-    const nonce = base64UrlStringEncode(createRandomString());
-    const scope = this.authenticationDetails.scope ?? "";
-    const scopeAsArray = scope.split(" ");
-    scopeAsArray.push("openid");
-
-    if (this.useRefreshToken) {
-      scopeAsArray.push("offline_access");
-    }
-
-    // removes duplicate values
-    const usedScope = [...new Set(scopeAsArray)].join(" ");
-
-    if (this.audience) {
-      url.searchParams.append("audience", this.audience);
-    }
-
-    if (this.maxAge) {
-      url.searchParams.append("max_age", this.maxAge.toString());
-    }
-
-    url.searchParams.append("state", state);
-    url.searchParams.append("nonce", nonce);
-    url.searchParams.append("scope", usedScope);
-    url.searchParams.append("client_id", this.clientId);
-    url.searchParams.append("code_challenge", codeChallenge);
-    // Note: The PKCE spec defines an additional code_challenge_method 'plain', but it is explicitly NOT recommended
-    // https://datatracker.ietf.org/doc/html/rfc7636#section-7.2
-    url.searchParams.append("code_challenge_method", "S256");
-
-    if (this.acrValues && this.acrValues.length > 0) {
-      const acrString = this.acrValues.join(" ");
-      url.searchParams.append("acr_values", acrString);
-    }
-
-    this.authenticationDetails.scope = usedScope;
-
-    return { url: url.toString(), codeVerifier };
   }
 
   private async queryUserAuthenticators(): Promise<{
@@ -279,8 +214,8 @@ export class AuthenticationTransaction {
 
     const queryUserAuthResponse: UserAuthenticateQueryResponse = await queryUserAuthOptions(
       {
-        transactionDetails: this.transactionDetails,
-        userId: this.userId,
+        transactionDetails: this.authenticationRequestParams?.transactionDetails,
+        userId: this.authenticationRequestParams?.userId || "",
         authRequestKey: this.requiredDetails.authRequestKey,
         applicationId: this.requiredDetails.applicationId,
         origin: window.location.origin,
@@ -300,9 +235,9 @@ export class AuthenticationTransaction {
     authenticationMethod: IdaasAuthenticationMethod;
     secondFactor: IdaasAuthenticationMethod | undefined;
   }> {
-    const userId = this.userId;
-    const strict = this.strict;
-    const preferredAuthenticationMethod = this.preferredAuthenticationMethod;
+    const userId = this.authenticationRequestParams?.userId;
+    const strict = this.authenticationRequestParams?.strict;
+    const preferredAuthenticationMethod = this.authenticationRequestParams?.preferredAuthenticationMethod;
 
     if (!userId) {
       // passkey auth
@@ -452,8 +387,8 @@ export class AuthenticationTransaction {
       accessToken: access_token as string,
       refreshToken: refresh_token as string,
       expiresAt: calculateEpochExpiry(expires_in),
-      audience: this.audience,
-      maxAge: this.maxAge,
+      audience: this.tokenOptions.audience,
+      maxAge: this.tokenOptions.maxAge,
     };
   };
 
@@ -585,9 +520,9 @@ export class AuthenticationTransaction {
     }
 
     const requestBody: UserChallengeParameters = {
-      transactionDetails: this.transactionDetails,
+      transactionDetails: this.authenticationRequestParams?.transactionDetails,
       applicationId: this.requiredDetails.applicationId,
-      userId: this.userId,
+      userId: this.authenticationRequestParams?.userId,
       authRequestKey: this.requiredDetails.authRequestKey,
     };
 
@@ -596,11 +531,13 @@ export class AuthenticationTransaction {
     }
 
     if (method === "TOKENPUSH") {
-      requestBody.pushMutualChallengeEnabled = this.tokenPushOptions.mutualChallengeEnabled;
+      requestBody.pushMutualChallengeEnabled =
+        this.authenticationRequestParams?.tokenPushOptions?.mutualChallengeEnabled;
     }
 
     if (method === "FACE") {
-      requestBody.pushMutualChallengeEnabled = this.faceBiometricOptions.mutualChallengeEnabled;
+      requestBody.pushMutualChallengeEnabled =
+        this.authenticationRequestParams?.faceBiometricOptions?.mutualChallengeEnabled;
     }
 
     if (this.isSecondFactor) {
@@ -609,11 +546,13 @@ export class AuthenticationTransaction {
       }
 
       if (secondFactor === "TOKENPUSH") {
-        requestBody.pushMutualChallengeEnabled = this.tokenPushOptions.mutualChallengeEnabled;
+        requestBody.pushMutualChallengeEnabled =
+          this.authenticationRequestParams?.tokenPushOptions?.mutualChallengeEnabled;
       }
 
       if (secondFactor === "FACE") {
-        requestBody.pushMutualChallengeEnabled = this.faceBiometricOptions.mutualChallengeEnabled;
+        requestBody.pushMutualChallengeEnabled =
+          this.authenticationRequestParams?.faceBiometricOptions?.mutualChallengeEnabled;
       }
 
       if (secondFactor === "FIDO") {
@@ -637,9 +576,9 @@ export class AuthenticationTransaction {
     }
 
     const requestBody: UserAuthenticateParameters = {
-      transactionDetails: this.transactionDetails,
+      transactionDetails: this.authenticationRequestParams?.transactionDetails,
       applicationId: this.requiredDetails.applicationId,
-      userId: this.userId,
+      userId: this.authenticationRequestParams?.userId,
     };
 
     if (this.isSecondFactor) {

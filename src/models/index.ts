@@ -206,7 +206,7 @@ export interface UserClaims {
   [propName: string]: unknown;
 }
 
-export interface AuthenticationTransactionOptions extends AuthenticationRequestParams {
+export interface AuthenticationTransactionOptions {
   /**
    * The OIDC config of the IDaaSClient.
    */
@@ -216,6 +216,23 @@ export interface AuthenticationTransactionOptions extends AuthenticationRequestP
    * The client ID of the IDaasClient.
    */
   clientId: string;
+
+  /**
+   * The configurable options when requesting an authentication challenge.
+   */
+  authenticationRequestParams?: AuthenticationRequestParams;
+
+  /**
+   * The configurable options when requesting an AccessToken.
+   */
+  tokenOptions: TokenOptions;
+
+  /**
+   * Determines whether the token obtained from this login request can use refresh tokens.  This defaults to the `globalUseRefreshToken` set in your `IdaasClientOptions` if not set.
+   *
+   * Note: Use of refresh tokens must be enabled on your IDaaS client application.
+   */
+  useRefreshToken: boolean;
 }
 
 export interface MutualChallenge {
