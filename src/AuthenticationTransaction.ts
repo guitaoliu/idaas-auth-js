@@ -538,6 +538,12 @@ export class AuthenticationTransaction {
       requestBody.otpDeliveryType = this.authenticationRequestParams?.otpDeliveryType;
     }
 
+    if (method === "SMARTCREDENTIALPUSH") {
+      requestBody.summary = this.authenticationRequestParams?.smartCredentialOptions?.summary;
+      requestBody.pushMessageIdentifier =
+        this.authenticationRequestParams?.smartCredentialOptions?.pushMessageIdentifier;
+    }
+
     if (this.isSecondFactor) {
       if (!(secondFactor && token)) {
         throw new Error("Error parsing authentication params");

@@ -52,6 +52,41 @@ export interface IdaasClientOptions {
 }
 
 /**
+ * Options for soft token authentication.
+ */
+export interface SoftTokenOptions {
+  /**
+   * The user ID of the user to authenticate.
+   */
+  userId: string;
+
+  /**
+   * Determines if push authentication (true) or standard token authentication (false) should be used. Default false.
+   */
+  push?: boolean;
+
+  /**
+   * Enables mutual challenge for push. Only valid if push is true. Default false.
+   */
+  mutualChallenge?: boolean;
+}
+
+/**
+ * Options for smart credential authentication.
+ */
+export interface SmartCredentialOptions {
+  /**
+   * The push authentication challenge that appears in the user's mobile application.
+   */
+  summary?: string;
+
+  /**
+   * Defines an identifier to retrieve customized SDK push message configuration.
+   */
+  pushMessageIdentifier?: string;
+}
+
+/**
  * The configurable options for the `login` and `requestChallenge` methods.
  */
 export interface TokenOptions {
@@ -290,6 +325,11 @@ export interface AuthenticationRequestParams {
    * Options available during TOKENPUSH authentication
    */
   tokenPushOptions?: TokenPushOptions;
+
+  /**
+   * Options available during SMART_CREDENTIAL authentication
+   */
+  smartCredentialOptions?: SmartCredentialOptions;
 
   /**
    * Options available during FACE authentication

@@ -1,25 +1,11 @@
-import type { AuthenticationRequestParams, AuthenticationResponse, AuthenticationSubmissionParams } from "./models";
+import type {
+  AuthenticationRequestParams,
+  AuthenticationResponse,
+  AuthenticationSubmissionParams,
+  SmartCredentialOptions,
+  SoftTokenOptions,
+} from "./models";
 import type { RbaClient } from "./RbaClient";
-
-/**
- * Options for soft token authentication
- */
-interface SoftTokenOptions {
-  /**
-   * The user ID of the user to authenticate.
-   */
-  userId: string;
-
-  /**
-   * Determines if push authentication (true) or standard token authentication (false) should be used. Default false.
-   */
-  push?: boolean;
-
-  /**
-   * Enables mutual challenge for push. Only valid if push is true. Default false.
-   */
-  mutualChallenge?: boolean;
-}
 
 /**
  * This class handles convenience authorization methods such as password-based authentication.
@@ -223,6 +209,32 @@ export class AuthClient {
       userId,
       strict: true,
       preferredAuthenticationMethod: "MAGICLINK",
+    });
+
+    return await this.rbaClient.poll();
+  }
+
+  /**
+   * Authenticate using Smart Credential Push.
+   * Requests a SMARTCREDENTIALPUSH challenge, then immediately starts polling for completion.
+   *
+   * @param userId The user ID to authenticate.
+   * @param summary The summary to display in the push notification.
+   * @param pushMessageIdentifier The identifier to retrieve customized SDK push message configuration.
+   * @returns AuthenticationResponse containing information regarding the authentication request. Includes the authenticationCompleted flag to indicate successful authentication.
+   */
+  public async authenticateSmartCredential(
+    userId: string,
+    { summary, pushMessageIdentifier }: SmartCredentialOptions = {},
+  ): Promise<AuthenticationResponse> {
+    await this.rbaClient.requestChallenge({
+      userId,
+      strict: true,
+      preferredAuthenticationMethod: "SMARTCREDENTIALPUSH",
+      smartCredentialOptions: {
+        summary,
+        pushMessageIdentifier,
+      },
     });
 
     return await this.rbaClient.poll();
