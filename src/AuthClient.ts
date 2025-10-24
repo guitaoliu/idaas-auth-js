@@ -2,6 +2,7 @@ import type {
   AuthenticationRequestParams,
   AuthenticationResponse,
   AuthenticationSubmissionParams,
+  FaceBiometricOptions,
   SmartCredentialOptions,
   SoftTokenOptions,
 } from "./models";
@@ -16,6 +17,19 @@ export class AuthClient {
 
   constructor(rbaClient: RbaClient) {
     this.rbaClient = rbaClient;
+  }
+
+  private async importOnfidoSdk() {
+    try {
+      const { Onfido } = await import("onfido-sdk-ui");
+      return Onfido;
+    } catch (error) {
+      console.error(
+        "Failed to import onfido-sdk-ui. Ensure the package is installed as it is required for face authentication.",
+        error,
+      );
+      throw error;
+    }
   }
 
   /**
@@ -33,7 +47,9 @@ export class AuthClient {
       preferredAuthenticationMethod: "PASSWORD",
     });
 
-    const authResult = await this.rbaClient.submitChallenge({ response: password });
+    const authResult = await this.rbaClient.submitChallenge({
+      response: password,
+    });
     return authResult;
   }
 
@@ -56,11 +72,10 @@ export class AuthClient {
    *   - Initial challenge response for TOKEN (requires submitChallenge with OTP).
    * @throws On request/poll errors.
    */
-  public async authenticateSoftToken({
-    userId,
-    mutualChallenge = false,
-    push = false,
-  }: SoftTokenOptions): Promise<AuthenticationResponse> {
+  public async authenticateSoftToken(
+    userId: string,
+    { mutualChallenge, push }: SoftTokenOptions = {},
+  ): Promise<AuthenticationResponse> {
     if (push && !mutualChallenge) {
       await this.rbaClient.requestChallenge({
         userId,
@@ -76,7 +91,7 @@ export class AuthClient {
         userId,
         strict: true,
         preferredAuthenticationMethod: "TOKENPUSH",
-        tokenPushOptions: { mutualChallengeEnabled: true },
+        softTokenOptions: { mutualChallenge: true },
       });
     }
 
@@ -134,7 +149,9 @@ export class AuthClient {
       });
 
       if (publicKeyCredential && publicKeyCredential instanceof PublicKeyCredential) {
-        return await this.rbaClient.submitChallenge({ passkeyResponse: publicKeyCredential });
+        return await this.rbaClient.submitChallenge({
+          passkeyResponse: publicKeyCredential,
+        });
       }
       throw new Error("No credential was returned.");
     }
@@ -238,6 +255,69 @@ export class AuthClient {
     });
 
     return await this.rbaClient.poll();
+  }
+
+  /**
+   * Authenticate using Face.
+   * Requests a FACE challenge, then initializes the Onfido Web SDK and polls for completion on onComplete.
+   *
+   * Requirements:
+   * - Optional peer dependency: Install 'onfido-sdk-ui' to use this method:
+   *     npm install onfido-sdk-ui
+   *   (It is declared as an optional peer dependency; projects not using face auth can omit it.)
+   * - DOM container: Ensure a <div id="onfido-mount"></div> exists in the DOM before calling. The SDK mounts its UI there.
+   *
+   * Flow:
+   * 1. requestChallenge(FACE) returns faceChallenge with sdkToken and workflowRunId.
+   * 2. Onfido.init is called with those values and containerId 'onfido-mount'.
+   * 3. On onComplete the method polls for final authentication status and resolves with the AuthenticationResponse.
+   *
+   * @param userId The user ID to authenticate.
+   * @param mutualChallenge Determines if the user must answer a mutual challenge for and FACE authenticator.
+   * @returns AuthenticationResponse containing information regarding the authentication request. Includes the authenticationCompleted flag to indicate successful authentication.
+   * @throws If faceChallenge is missing, Onfido initialization fails, or polling fails.
+   */
+  public async authenticateFace(
+    userId: string,
+    { mutualChallenge }: FaceBiometricOptions = {},
+  ): Promise<AuthenticationResponse> {
+    const challengeResponse = await this.rbaClient.requestChallenge({
+      userId,
+      strict: true,
+      preferredAuthenticationMethod: "FACE",
+      faceBiometricOptions: { mutualChallenge: mutualChallenge },
+    });
+
+    if (!challengeResponse.faceChallenge) {
+      throw new Error("Face challenge data is missing in the authentication response.");
+    }
+
+    if (challengeResponse.faceChallenge.device !== "WEB") {
+      return mutualChallenge ? challengeResponse : await this.rbaClient.poll();
+    }
+
+    const Onfido = await this.importOnfidoSdk();
+
+    const authenticationResponse = await new Promise<AuthenticationResponse>((resolve, reject) => {
+      try {
+        const instance = Onfido.init({
+          token: challengeResponse.faceChallenge?.sdkToken,
+          workflowRunId: challengeResponse.faceChallenge?.workflowRunId,
+          containerId: "onfido-mount",
+          onComplete: async () => {
+            const authenticationPollResponse = await this.rbaClient.poll();
+            resolve(authenticationPollResponse);
+            instance.tearDown();
+          },
+          onError: (error) => {
+            reject(error);
+          },
+        });
+      } catch (e) {
+        reject(e);
+      }
+    });
+    return authenticationResponse;
   }
 
   /**

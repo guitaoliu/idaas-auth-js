@@ -52,26 +52,6 @@ export interface IdaasClientOptions {
 }
 
 /**
- * Options for soft token authentication.
- */
-export interface SoftTokenOptions {
-  /**
-   * The user ID of the user to authenticate.
-   */
-  userId: string;
-
-  /**
-   * Determines if push authentication (true) or standard token authentication (false) should be used. Default false.
-   */
-  push?: boolean;
-
-  /**
-   * Enables mutual challenge for push. Only valid if push is true. Default false.
-   */
-  mutualChallenge?: boolean;
-}
-
-/**
  * Options for smart credential authentication.
  */
 export interface SmartCredentialOptions {
@@ -270,22 +250,30 @@ export interface AuthenticationTransactionOptions {
   useRefreshToken: boolean;
 }
 
-export interface MutualChallenge {
-  /**
-   * Determines if the user must answer a mutual challenge for the TOKENPUSH and FACE authenticators.
-   */
-  mutualChallengeEnabled?: boolean;
-}
-
 /**
  * The configurable options when requesting a FACE authentication challenge.
  */
-export interface FaceBiometricOptions extends MutualChallenge {}
+export interface FaceBiometricOptions {
+  /**
+   * Determines if the user must answer a mutual challenge for the FACE authenticators.
+   */
+  mutualChallenge?: boolean;
+}
 
 /**
- * The configurable options when requesting a TOKENPUSH authentication challenge.
+ * The configurable options when requesting a TOKEN/TOKENPUSH authentication challenge.
  */
-export interface TokenPushOptions extends MutualChallenge {}
+export interface SoftTokenOptions {
+  /**
+   * Determines if push authentication (true) or standard token authentication (false) should be used. Default false.
+   */
+  push?: boolean;
+
+  /**
+   * Determines if the user must answer a mutual challenge for the TOKENPUSH authenticators. Ignored if push is false.
+   */
+  mutualChallenge?: boolean;
+}
 
 /**
  * The OTP delivery types available when requesting an OTP authentication challenge.
@@ -324,7 +312,7 @@ export interface AuthenticationRequestParams {
   /**
    * Options available during TOKENPUSH authentication
    */
-  tokenPushOptions?: TokenPushOptions;
+  softTokenOptions?: SoftTokenOptions;
 
   /**
    * Options available during SMART_CREDENTIAL authentication
@@ -403,8 +391,6 @@ export interface AuthenticationResponse {
 
   /**
    * Parameters required for completing the `FACE` authentication method.
-   *
-   * TODO: onfido SDK integration, not necessary when complete. Required for WEB bio auth
    */
   faceChallenge?: FaceChallenge;
 
@@ -437,7 +423,7 @@ export type IdaasAuthenticationMethod =
   | "PASSWORD_AND_SECONDFACTOR"
   | "MAGICLINK"
   | "PASSKEY"
-  | "FACE" // TODO onfido sdk integration for web auth
+  | "FACE"
   | "EXTERNAL";
 
 export interface PublicKeyCredentialRequestOptionsJSON

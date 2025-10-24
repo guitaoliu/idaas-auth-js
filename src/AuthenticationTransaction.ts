@@ -525,13 +525,11 @@ export class AuthenticationTransaction {
     }
 
     if (method === "TOKENPUSH") {
-      requestBody.pushMutualChallengeEnabled =
-        this.authenticationRequestParams?.tokenPushOptions?.mutualChallengeEnabled;
+      requestBody.pushMutualChallengeEnabled = this.authenticationRequestParams?.softTokenOptions?.mutualChallenge;
     }
 
     if (method === "FACE") {
-      requestBody.pushMutualChallengeEnabled =
-        this.authenticationRequestParams?.faceBiometricOptions?.mutualChallengeEnabled;
+      requestBody.pushMutualChallengeEnabled = this.authenticationRequestParams?.faceBiometricOptions?.mutualChallenge;
     }
 
     if (method === "OTP") {
@@ -550,17 +548,26 @@ export class AuthenticationTransaction {
       }
 
       if (secondFactor === "TOKENPUSH") {
-        requestBody.pushMutualChallengeEnabled =
-          this.authenticationRequestParams?.tokenPushOptions?.mutualChallengeEnabled;
+        requestBody.pushMutualChallengeEnabled = this.authenticationRequestParams?.softTokenOptions?.mutualChallenge;
       }
 
       if (secondFactor === "FACE") {
         requestBody.pushMutualChallengeEnabled =
-          this.authenticationRequestParams?.faceBiometricOptions?.mutualChallengeEnabled;
+          this.authenticationRequestParams?.faceBiometricOptions?.mutualChallenge;
       }
 
       if (secondFactor === "FIDO") {
         requestBody.origin = window.location.origin;
+      }
+
+      if (method === "OTP") {
+        requestBody.otpDeliveryType = this.authenticationRequestParams?.otpDeliveryType;
+      }
+
+      if (method === "SMARTCREDENTIALPUSH") {
+        requestBody.summary = this.authenticationRequestParams?.smartCredentialOptions?.summary;
+        requestBody.pushMessageIdentifier =
+          this.authenticationRequestParams?.smartCredentialOptions?.pushMessageIdentifier;
       }
 
       requestBody.secondFactorAuthenticator = secondFactor;

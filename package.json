@@ -48,6 +48,14 @@
   "dependencies": {
     "jose": "6.1.0"
   },
+  "peerDependencies": {
+    "onfido-sdk-ui": "^14.50.0"
+  },
+  "peerDependenciesMeta": {
+    "onfido-sdk-ui": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.2",
     "@biomejs/biome": "2.3.0",
@@ -63,6 +71,7 @@
     "@types/oidc-provider": "9.5.0",
     "@types/web": "0.0.283",
     "oidc-provider": "9.5.2",
+    "onfido-sdk-ui": "14.50.0",
     "rsbuild-plugin-publint": "0.3.3",
     "typescript": "5.9.3"
   }

@@ -14,9 +14,7 @@ document.getElementById("request-challenge-token")?.addEventListener("click", as
   hideAll();
 
   try {
-    const challengeResponse = await idaasClient.auth.authenticateSoftToken({
-      userId: USERNAME,
-    });
+    const challengeResponse = await idaasClient.auth.authenticateSoftToken(USERNAME);
 
     console.log("Challenge response:", challengeResponse);
     updateChallengeUI(challengeResponse);
@@ -32,8 +30,7 @@ document.getElementById("request-challenge-token")?.addEventListener("click", as
 document.getElementById("request-challenge-token-push")?.addEventListener("click", async () => {
   hideAll();
   try {
-    const challengeResponse = await idaasClient.auth.authenticateSoftToken({
-      userId: USERNAME,
+    const challengeResponse = await idaasClient.auth.authenticateSoftToken(USERNAME, {
       push: true,
     });
 
@@ -50,8 +47,7 @@ document.getElementById("request-challenge-token-push-mutual")?.addEventListener
   console.info("Requesting token push with mutual auth challenge");
   hideAll();
   try {
-    const challengeResponse = await idaasClient.auth.authenticateSoftToken({
-      userId: USERNAME,
+    const challengeResponse = await idaasClient.auth.authenticateSoftToken(USERNAME, {
       push: true,
       mutualChallenge: true,
     });

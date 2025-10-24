@@ -9,12 +9,14 @@ export default defineConfig({
       format: "esm",
       syntax: "es2021",
       bundle: true,
+      autoExternal: true,
       dts: {
         bundle: true,
       },
       output: {
         cleanDistPath: true,
         target: "web",
+        externals: ["onfido-sdk-ui"],
       },
     },
   ],
