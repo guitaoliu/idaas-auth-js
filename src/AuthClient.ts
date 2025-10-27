@@ -3,6 +3,7 @@ import type {
   AuthenticationResponse,
   AuthenticationSubmissionParams,
   FaceBiometricOptions,
+  OtpOptions,
   SmartCredentialOptions,
   SoftTokenOptions,
 } from "./models";
@@ -200,17 +201,18 @@ export class AuthClient {
    *
    * @param userId The user ID to authenticate.
    * @param otpDeliveryType The delivery type for the OTP (e.g., "SMS", "EMAIL", "VOICE"). If not set will use the default delivery method.
+   * @param otpDeliveryAttribute The delivery attribute for the OTP (e.g., "business-email"). If not set will use the default delivery attribute.
    * @returns AuthenticationResponse containing information regarding the authentication request. Includes the authenticationCompleted flag to indicate successful authentication.
    */
   public async authenticateOtp(
     userId: string,
-    otpDeliveryType?: "EMAIL" | "SMS" | "VOICE" | "WECHAT" | "WHATSAPP",
+    { otpDeliveryType, otpDeliveryAttribute }: OtpOptions = {},
   ): Promise<AuthenticationResponse> {
     return await this.rbaClient.requestChallenge({
       userId,
       strict: true,
       preferredAuthenticationMethod: "OTP",
-      otpDeliveryType,
+      otpOptions: { otpDeliveryAttribute, otpDeliveryType },
     });
   }
 

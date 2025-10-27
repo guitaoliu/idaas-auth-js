@@ -33,7 +33,7 @@ document.getElementById("request-challenge-otp-email")?.addEventListener("click"
   hideResponse();
 
   try {
-    const challengeResponse = await idaasClient.auth.authenticateOtp(USERNAME, "EMAIL");
+    const challengeResponse = await idaasClient.auth.authenticateOtp(USERNAME, { otpDeliveryType: "EMAIL" });
 
     console.log("Challenge response:", challengeResponse);
     updateChallengeUI(challengeResponse);
@@ -51,7 +51,7 @@ document.getElementById("request-challenge-otp-sms")?.addEventListener("click", 
   hideResponse();
 
   try {
-    const challengeResponse = await idaasClient.auth.authenticateOtp(USERNAME, "SMS");
+    const challengeResponse = await idaasClient.auth.authenticateOtp(USERNAME, { otpDeliveryType: "SMS" });
 
     console.log("Challenge response:", challengeResponse);
     updateChallengeUI(challengeResponse);
@@ -69,7 +69,25 @@ document.getElementById("request-challenge-otp-voice")?.addEventListener("click"
   hideResponse();
 
   try {
-    const challengeResponse = await idaasClient.auth.authenticateOtp(USERNAME, "VOICE");
+    const challengeResponse = await idaasClient.auth.authenticateOtp(USERNAME, { otpDeliveryType: "VOICE" });
+
+    console.log("Challenge response:", challengeResponse);
+    updateChallengeUI(challengeResponse);
+    showInputArea();
+  } catch (error) {
+    console.error("Request challenge failed:", error);
+    updateChallengeUI(null, error);
+  }
+});
+
+// OTP delivery attribute
+document.getElementById("request-challenge-otp-attribute")?.addEventListener("click", async () => {
+  console.info("Requesting OTP challenge");
+  hideInputArea();
+  hideResponse();
+
+  try {
+    const challengeResponse = await idaasClient.auth.authenticateOtp(USERNAME, { otpDeliveryAttribute: "test" });
 
     console.log("Challenge response:", challengeResponse);
     updateChallengeUI(challengeResponse);

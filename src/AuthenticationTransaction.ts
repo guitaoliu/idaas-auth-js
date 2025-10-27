@@ -533,7 +533,8 @@ export class AuthenticationTransaction {
     }
 
     if (method === "OTP") {
-      requestBody.otpDeliveryType = this.authenticationRequestParams?.otpDeliveryType;
+      requestBody.otpDeliveryType = this.authenticationRequestParams?.otpOptions?.otpDeliveryType;
+      requestBody.otpDeliveryAttribute = this.authenticationRequestParams?.otpOptions?.otpDeliveryAttribute;
     }
 
     if (method === "SMARTCREDENTIALPUSH") {
@@ -560,11 +561,12 @@ export class AuthenticationTransaction {
         requestBody.origin = window.location.origin;
       }
 
-      if (method === "OTP") {
-        requestBody.otpDeliveryType = this.authenticationRequestParams?.otpDeliveryType;
+      if (secondFactor === "OTP") {
+        requestBody.otpDeliveryType = this.authenticationRequestParams?.otpOptions?.otpDeliveryType;
+        requestBody.otpDeliveryAttribute = this.authenticationRequestParams?.otpOptions?.otpDeliveryAttribute;
       }
 
-      if (method === "SMARTCREDENTIALPUSH") {
+      if (secondFactor === "SMARTCREDENTIALPUSH") {
         requestBody.summary = this.authenticationRequestParams?.smartCredentialOptions?.summary;
         requestBody.pushMessageIdentifier =
           this.authenticationRequestParams?.smartCredentialOptions?.pushMessageIdentifier;

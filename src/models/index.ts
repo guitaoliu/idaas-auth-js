@@ -5,6 +5,7 @@ import type {
   KbaChallenge,
   TempAccessCodeChallenge,
   TransactionDetail,
+  UserChallengeParameters,
 } from "./openapi-ts";
 
 /**
@@ -274,11 +275,17 @@ export interface SoftTokenOptions {
    */
   mutualChallenge?: boolean;
 }
+export interface OtpOptions {
+  /**
+   * The delivery type for the OTP challenge.
+   */
+  otpDeliveryType?: UserChallengeParameters["otpDeliveryType"];
 
-/**
- * The OTP delivery types available when requesting an OTP authentication challenge.
- */
-export type OtpDeliveryType = "EMAIL" | "SMS" | "VOICE" | "WECHAT" | "WHATSAPP";
+  /**
+   * The name of the delivery attribute to use for the OTP challenge, such as a "business-email".
+   */
+  otpDeliveryAttribute?: string;
+}
 
 /**
  * The configurable options when requesting an authentication challenge.
@@ -305,9 +312,9 @@ export interface AuthenticationRequestParams {
   strict?: boolean;
 
   /**
-   * The OTP delivery type to be used during OTP authentication.
+   * Options available during OTP authentication
    */
-  otpDeliveryType?: OtpDeliveryType;
+  otpOptions?: OtpOptions;
 
   /**
    * Options available during TOKENPUSH authentication
