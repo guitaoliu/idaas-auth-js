@@ -574,6 +574,7 @@ export class AuthenticationTransaction {
       transactionDetails: this.authenticationRequestParams?.transactionDetails,
       applicationId: this.requiredDetails.applicationId,
       userId: this.authenticationRequestParams?.userId,
+      authRequestKey: this.requiredDetails.authRequestKey,
     };
 
     if (this.isSecondFactor) {

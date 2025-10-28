@@ -122,6 +122,7 @@ export class RbaClient {
       tokenOptions: {
         audience: tokenOptions?.audience ?? this.context.globalAudience,
         scope: tokenOptions?.scope ?? this.context.globalScope,
+        acrValues: tokenOptions?.acrValues,
       },
       clientId: this.context.clientId,
     });
