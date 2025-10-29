@@ -8,6 +8,7 @@ import type {
   SoftTokenOptions,
 } from "./models";
 import type { RbaClient } from "./RbaClient";
+import { browserSupportsPasskey } from "./utils/browser";
 
 /**
  * This class handles convenience authorization methods such as password-based authentication.
@@ -136,6 +137,11 @@ export class AuthClient {
    * @throws On unexpected WebAuthn (navigator.credentials.get) errors or if user cancels passkey ceremony.
    */
   public async authenticatePasskey(userId?: string): Promise<AuthenticationResponse | undefined> {
+    const browserSupported = await browserSupportsPasskey();
+    if (!browserSupported) {
+      throw new Error("This browser does not support passkey");
+    }
+
     const authenticationRequestParams: AuthenticationRequestParams = {
       strict: true,
       preferredAuthenticationMethod: userId ? "FIDO" : "PASSKEY",

@@ -1,3 +1,4 @@
+import { Onfido } from "onfido-sdk-ui";
 import type { AuthenticationResponse } from "../../../src/models";
 import {
   handleCancelAuth,
@@ -28,27 +29,12 @@ document.getElementById("request-challenge-password")?.addEventListener("click",
     challengeResponse = await idaasClient.rba.requestChallenge({
       userId: USERNAME,
       password,
+      preferredAuthenticationMethod: "TEMP_ACCESS_CODE",
     });
 
     console.log("Challenge response:", challengeResponse);
     updateChallengeUI(challengeResponse);
-    if (challengeResponse.pollForCompletion) {
-      submitResponse = await idaasClient.rba.poll();
-      updateSubmitUI(submitResponse);
-    } else if (challengeResponse.secondFactorMethod === "PASSKEY" || challengeResponse.secondFactorMethod === "FIDO") {
-      const publicKeyCredential = (await navigator.credentials.get({
-        publicKey: challengeResponse.passkeyChallenge,
-      })) as PublicKeyCredential;
-      if (publicKeyCredential) {
-        submitResponse = await idaasClient.rba.submitChallenge({
-          passkeyResponse: publicKeyCredential,
-        });
-      }
-      updateSubmitUI(submitResponse);
-    } else {
-      hideRequestChallengeArea();
-      showInputArea();
-    }
+    handleAuthentication(challengeResponse);
   } catch (error) {
     console.error("Request challenge failed:", error);
     updateChallengeUI(null, error);
@@ -133,22 +119,7 @@ document.getElementById("submit-password-response")?.addEventListener("click", a
     });
     console.log("Submit response:", submitResponse);
     updateSubmitUI(submitResponse);
-    if (submitResponse.pollForCompletion) {
-      submitResponse = await idaasClient.rba.poll();
-      updateSubmitUI(submitResponse);
-    } else if (submitResponse.secondFactorMethod === "PASSKEY" || submitResponse.secondFactorMethod === "FIDO") {
-      const publicKeyCredential = (await navigator.credentials.get({
-        publicKey: submitResponse.passkeyChallenge,
-      })) as PublicKeyCredential;
-      if (publicKeyCredential) {
-        submitResponse = await idaasClient.rba.submitChallenge({
-          passkeyResponse: publicKeyCredential,
-        });
-      }
-      updateSubmitUI(submitResponse);
-    } else {
-      showInputArea();
-    }
+    handleAuthentication(submitResponse);
   } catch (error) {
     console.error("Submit password failed:", error);
     updateSubmitUI(null, error);
@@ -187,6 +158,46 @@ const showRequestChallengeArea = () => {
   if (requestChallengeArea) {
     requestChallengeArea.style.display = "block";
   }
+};
+
+const handleAuthentication = async (response: AuthenticationResponse) => {
+  if (response.secondFactorMethod === "FACE" && response.faceChallenge?.device === "WEB") {
+    onfidoSdk(response);
+  } else if (response.secondFactorMethod === "PASSKEY" || response.secondFactorMethod === "FIDO") {
+    const publicKeyCredential = (await navigator.credentials.get({
+      publicKey: response.passkeyChallenge,
+    })) as PublicKeyCredential;
+    if (publicKeyCredential) {
+      submitResponse = await idaasClient.rba.submitChallenge({
+        passkeyResponse: publicKeyCredential,
+      });
+    }
+    updateSubmitUI(submitResponse);
+  } else if (response.pollForCompletion) {
+    submitResponse = await idaasClient.rba.poll();
+    updateSubmitUI(submitResponse);
+  } else {
+    showInputArea();
+  }
+};
+
+const onfidoSdk = (challenge: AuthenticationResponse) => {
+  const instance = Onfido.init({
+    token: challenge.faceChallenge?.sdkToken,
+    workflowRunId: challenge.faceChallenge?.workflowRunId,
+    containerId: "onfido-mount",
+    onComplete: async () => {
+      let authenticationPollResponse: AuthenticationResponse;
+      try {
+        authenticationPollResponse = await idaasClient.rba.poll();
+        updateSubmitUI(authenticationPollResponse);
+      } catch (error) {
+        console.error("Error during authentication polling:", error);
+      } finally {
+        instance.tearDown();
+      }
+    },
+  });
 };
 
 // Back button

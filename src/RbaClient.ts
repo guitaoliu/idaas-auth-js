@@ -63,10 +63,6 @@ export class RbaClient {
       throw new Error("No authentication transaction in progress!");
     }
 
-    if (options.passkeyResponse) {
-      this.authenticationTransaction.submitPasskey(options.passkeyResponse);
-    }
-
     const authenticationResponse = await this.authenticationTransaction.submitAuthChallenge({ ...options });
 
     if (authenticationResponse.authenticationCompleted) {
