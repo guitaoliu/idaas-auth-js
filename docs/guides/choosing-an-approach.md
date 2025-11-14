@@ -87,16 +87,30 @@ The RBA approach leverages IDaaS's **Resource Rules** to perform risk evaluation
 
 ### Understanding Resource Rules
 
-Resource Rules are configured in IDaaS to evaluate risk and determine authentication requirements. IDaaS evaluates the following factors when determining risk level:
+Resource Rules are configured in IDaaS to evaluate risk and determine authentication requirements. IDaaS evaluates two types of factors:
+
+#### Environmental Risk Factors (Automatically Evaluated)
+
+These factors are automatically collected and evaluated by IDaaS without needing to be sent in transaction details:
 
 - **Date and time of request** - When the authentication attempt occurs
-- **Location of request** - Geolocation of the authentication attempt
+- **Location of request** - Geolocation of the authentication attempt (GeoIP lookup)
 - **Source IP address** - IP address of the request origin
 - **Machine authentication** - Device fingerprinting to identify trusted devices
 - **Location history** - Historical authentication locations for this user
 - **Travel velocity** - Speed of location changes between authentication attempts
 
-Based on this risk evaluation, IDaaS responds with the authentication methods that can be used, which may include:
+#### Transaction Detail Factors (Application-Provided)
+
+Your application can send additional context via transaction details that Resource Rules can evaluate:
+
+- **TRANSACTION_AMOUNT** - Monetary value that can trigger higher authentication requirements
+- **TRANSACTION_TYPE** - Type of operation (e.g., wire transfer, purchase, withdrawal)
+- **Any custom detail** - Other business-specific values your Resource Rules are configured to evaluate
+
+**Important:** Transaction details with `usage: ["RBA"]` or `usage: ["RBA", "TVS"]` are passed to the Resource Rules engine where you can define conditions and risk levels based on these values. For example, you might require stronger authentication for transactions over $10,000 or for specific transaction types.
+
+Based on evaluation of both environmental factors and transaction details, IDaaS responds with the authentication methods that can be used, which may include:
 
 - Single-factor authentication for low-risk scenarios
 - Multi-factor authentication for medium-risk scenarios
