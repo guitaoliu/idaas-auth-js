@@ -78,7 +78,7 @@ See the [Quickstart guide](docs/quickstart.md) for configuration options, redire
 
 ### Guides
 
-- [Overview](docs/index.md)
+- [Overview](docs/README.md)
 - [Quickstart](docs/quickstart.md)
 - [Choosing an Authentication Approach](docs/guides/choosing-an-approach.md)
 - [OIDC Guide](docs/guides/oidc.md)
